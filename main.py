@@ -107,41 +107,6 @@ class Data:
             ignore_index=True,
         )
 
-    def load(self):
-        """
-        Load method to load and preprocess GAL and SINAN datasets.
-        """
-        # GAL
-        print("Escolha o dataset do GAL para usar...")
-        self.df_gal = self.__get_df()
-        self.df_gal["Nome do Paciente"] = self.df_gal["Nome do Paciente"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_gal["Nome da Mãe"] = self.df_gal["Nome da Mãe"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_gal["Data de Nascimento"] = pd.to_datetime(
-            self.df_gal["Data de Nascimento"]
-        )
-        self.df_gal["Data de Inicio dos Sintomas"] = pd.to_datetime(
-            self.df_gal["Data de Inicio dos Sintomas"]
-        )
-        self.df_gal["Data da Coleta"] = pd.to_datetime(
-            self.df_gal["Data da Coleta"]
-        )
-
-        # SINAN
-        print("Escolha o dataset do SINAN para usar...")
-        self.df_sin = self.__get_df()
-        self.df_sin["NM_PACIENT"] = self.df_sin["NM_PACIENT"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_sin["NM_MAE_PAC"] = self.df_sin["NM_MAE_PAC"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_sin["DT_NASC"] = pd.to_datetime(self.df_sin["DT_NASC"])
-        self.df_sin["DT_SIN_PRI"] = pd.to_datetime(self.df_sin["DT_SIN_PRI"])
-
     def __remove_duplicates(self):
         """
         Remove duplicate patients from the SINAN dataset based on specified criteria.
@@ -230,6 +195,55 @@ class Data:
 
         self.df = pd.DataFrame(new_rows)
 
+    def __exam_filters(self):
+        """
+        A function to filter the content of the merged dataframe based on specific exam types and their corresponding rules.
+
+        Raise:
+            Exception: If the merged dataframe is not defined yet.
+        """
+        logging.info(
+            "Filtrando pacientes que irão ser usados para alimentar o SINAN..."
+        )
+        if not self.df:
+            raise Exception("Merged dataframe is not defined yet.")
+
+        exams_map = {
+            "Dengue, IgM": "IgM",
+            "Dengue, Detecção de Antígeno NS1": "NS1",
+            "Dengue, Biologia Molecular": "PCR",
+        }
+
+        rules = {
+            "IgM": lambda time: time >= pd.Timedelta(days=6),
+            "NS1": lambda time: time <= pd.Timedelta(days=5),
+            "PCR": lambda time: time <= pd.Timedelta(days=5),
+        }
+
+        def filter_content(row: pd.Series) -> bool:
+            exam_type = exams_map.get(row["Exame"])
+            if not exam_type:
+                logging.error(
+                    f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente."
+                )
+                return False
+
+            rule = rules[exam_type]  # i believe that this will work
+            elapsed_time = abs(
+                (
+                    row["Data dos Primeiros Sintomas"] - row["Data da Coleta"]
+                ).days
+            )
+
+            return rule(elapsed_time)
+
+        self.df = self.df[
+            self.df.apply(filter_content, axis=1, result_type="reduce")
+        ]
+        logging.info(
+            f"Total de pacientes para abeis para irem para o SINAN: {len(self.df)}"
+        )
+
     def clean_data(self):
         """
         Method to clean the data. It logs the start of the cleaning process, loads the data, logs the successful data load, and then iterates through a list of cleaning functions to clean the data.
@@ -238,9 +252,51 @@ class Data:
         self.load()
         logging.info("Dados carregados.")
 
-        cleaners = [self.__remove_duplicates, self.__join_datasets]
+        cleaners = [
+            self.__remove_duplicates,
+            self.__join_datasets,
+            self.__exam_filters,
+        ]
         for fn in cleaners:
             fn()
+        logging.info("Limpeza concluída.")
+
+    def load(self):
+        """
+        Load method to load and preprocess GAL and SINAN datasets.
+        """
+        # GAL
+        print("Escolha o dataset do GAL para usar...")
+        self.df_gal = self.__get_df()
+        self.df_gal["Nome do Paciente"] = self.df_gal["Nome do Paciente"].apply(
+            lambda x: normalize_name(x)
+        )
+        self.df_gal["Nome da Mãe"] = self.df_gal["Nome da Mãe"].apply(
+            lambda x: normalize_name(x)
+        )
+        self.df_gal["Data de Nascimento"] = pd.to_datetime(
+            self.df_gal["Data de Nascimento"]
+        )
+        self.df_gal["Data de Inicio dos Sintomas"] = pd.to_datetime(
+            self.df_gal["Data de Inicio dos Sintomas"]
+        )
+        self.df_gal["Data da Coleta"] = pd.to_datetime(
+            self.df_gal["Data da Coleta"]
+        )
+
+        # SINAN
+        print("Escolha o dataset do SINAN para usar...")
+        self.df_sin = self.__get_df()
+        self.df_sin["NM_PACIENT"] = self.df_sin["NM_PACIENT"].apply(
+            lambda x: normalize_name(x)
+        )
+        self.df_sin["NM_MAE_PAC"] = self.df_sin["NM_MAE_PAC"].apply(
+            lambda x: normalize_name(x)
+        )
+        self.df_sin["DT_NASC"] = pd.to_datetime(self.df_sin["DT_NASC"])
+        self.df_sin["DT_SIN_PRI"] = pd.to_datetime(self.df_sin["DT_SIN_PRI"])
+
+        self.clean_data()
 
 
 class Sinan:
@@ -254,7 +310,9 @@ class Sinan:
         self._username = username
         self._password = password
 
-    def _get_data(self): ...
+    def _get_data(self):
+        self.data = Data()
+        self.data.load()
 
     def _login(self): ...
 
