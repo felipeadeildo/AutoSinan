@@ -2,15 +2,21 @@ import logging
 import os
 import re
 from pathlib import Path
+from typing import List
 
 import pandas as pd
 
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.DEBUG,
     format="%(asctime)s - %(levelname)s - %(message)s",
-    datefmt="%d/%m/%Y %H:%M:%S",
-    handlers=[logging.StreamHandler()],
+    datefmt="%d/%m/%y %H:%M:%S",
+    handlers=[logging.FileHandler("main.log"), logging.StreamHandler()],
 )
+
+
+def clear_screen():
+    """Clear the console screen"""
+    os.system("cls" if os.name == "nt" else "clear")
 
 
 def load_data(path: Path) -> pd.DataFrame:
@@ -29,7 +35,7 @@ def load_data(path: Path) -> pd.DataFrame:
     ext = path.suffix
     match ext:
         case ".csv":
-            return pd.read_csv(path)
+            return pd.read_csv(path, sep=";", encoding="latin-1")
         case ".xlsx":
             return pd.read_excel(path)
         case _:
@@ -45,7 +51,32 @@ def normalize_name(name: str) -> str:
     Returns:
         str: Normalized name
     """
+    if not isinstance(name, str):
+        return name
     return re.sub(r"\s+", " ", name).strip().upper()
+
+
+def normalize_columns(df: pd.DataFrame, columns: List[str]):
+    """Inplace normalization of columns
+
+    Args:
+        df (pd.DataFrame): Dataframe with columns to normalize
+        columns (List[str]): List of columns to normalize
+    """
+    for column in columns:
+        df[column] = df[column].apply(lambda x: normalize_name(x))
+
+
+def to_datetime(df: pd.DataFrame, columns: List[str], **kw):
+    """Inplace conversion of columns to datetime
+
+    Args:
+        df (pd.DataFrame): Dataframe with columns to convert
+        columns (List[str]): List of columns to convert
+        **kw: Keyword arguments to pass to pd.to_datetime
+    """
+    for column in columns:
+        df[column] = pd.to_datetime(df[column], **kw)
 
 
 class Data:
@@ -56,7 +87,6 @@ class Data:
         if not self.__datafolder.exists():
             self.__datafolder.mkdir()
         self.df = None
-        self.load()
 
     def __choice_datasets(self):
         """
@@ -71,11 +101,11 @@ class Data:
             exit(1)
 
         while True:
-            for i, dataset in enumerate(os.listdir(self.__datafolder), 1):
+            for i, dataset in enumerate(datasets, 1):
                 print(f"{i:2} - {dataset}")
             try:
                 choice = input(
-                    "Selecione um dos datasets [`Enter` para parar]: "
+                    "Selecione um dos datasets ['Enter' para parar]: "
                 ).strip()
                 if not choice:
                     break
@@ -85,7 +115,11 @@ class Data:
                 continue
             else:
                 if 1 <= choice <= len(datasets):
-                    selecteds.append(datasets[choice - 1])
+                    selected = datasets[choice - 1]
+                    selecteds.append(selected)
+                    datasets.pop(choice - 1)
+                    clear_screen()
+                    logging.info(f"Dataset selecionado: {selected}")
                 else:
                     print("Escolha inválida. Por favor, tente novamente.")
                     continue
@@ -102,8 +136,16 @@ class Data:
         Get a dataframe by concatenating selected datasets.
         """
         selecteds = self.__choice_datasets()
+
+        dfs = [
+            load_data(
+                self.__datafolder / dataset,
+            )
+            for dataset in selecteds
+        ]
+
         return pd.concat(
-            [self.__datafolder / dataset for dataset in selecteds],
+            dfs,
             ignore_index=True,
         )
 
@@ -120,40 +162,53 @@ class Data:
 
         # Define the criteria for identifying duplicates
         duplicate_criteria = ["NM_PACIENT", "DT_NASC", "NM_MAE_PAC"]
-        max_notification_date_diff = pd.Timedelta(days=15)
+        MAX_NOTIFICATION_DATE_DIFF = pd.Timedelta(days=15)
 
         # Sort the SINAN dataset by notification date
         self.df_sin.sort_values(by=[DATE_COLUMN], inplace=True)
 
         # Find and mark duplicates based on the specified criteria
-        is_duplicate = self.df_sin.duplicated(
-            subset=duplicate_criteria, keep="first"
+        duplicated_mask = self.df_sin.duplicated(
+            subset=duplicate_criteria, keep=False
         )
 
-        # Iterate through the dataset to handle duplicates
-        for index, row in self.df_sin.iterrows():
-            if is_duplicate[index]:  # type: ignore [__getitem__ is defined]
-                # Check for duplicates within a maximum notification date difference
-                notification_date = row[DATE_COLUMN]
-                duplicates_within_range = self.df_sin[
-                    (self.df_sin[duplicate_criteria] == row[duplicate_criteria])
-                    & (
-                        self.df_sin[DATE_COLUMN] - notification_date
-                        <= max_notification_date_diff
+        grouped = self.df_sin[duplicated_mask].groupby(duplicate_criteria)
+
+        # Filter the duplicates based on the maximum notification date difference
+        considered_patients_duplicates = []
+        for group_name, group_index in grouped.groups.items():
+            group = self.df_sin.loc[group_index]
+            considered_patients = [group.iloc[0]]
+            for _, patient in group.iloc[1:].iterrows():
+                if (
+                    abs(
+                        considered_patients[-1][DATE_COLUMN]
+                        - patient[DATE_COLUMN]
                     )
-                ]
+                    <= MAX_NOTIFICATION_DATE_DIFF
+                ):
+                    considered_patients.append(patient)
+                else:
+                    logging.warning(
+                        f'Paciente {patient["NM_PACIENT"]} foi removido por duplicidade.'
+                    )
 
-                # Identify the duplicates and mark them as needed
-                if len(duplicates_within_range) > 1:
-                    # Handle the duplicates (e.g., choose one, merge data, or mark)
-                    # Here, we're just marking them for removal
-                    self.df_sin.at[index, "is_duplicate"] = True
+            considered_patients_str = "\t\n".join(
+                str(p["NM_PACIENT"]) for p in considered_patients
+            )
 
-        # Remove the marked duplicate rows
-        self.df_sin = self.df_sin[~self.df_sin["is_duplicate"]]
+            logging.debug(
+                f"Grupo de Duplicados: {group_name} foram considerados:\n{considered_patients_str}"
+            )
+            considered_patients_duplicates.extend(considered_patients)
 
-        # Cleanup: remove the temporary 'is_duplicate' column
-        self.df_sin.drop(columns=["is_duplicate"], inplace=True)
+        df_considered_duplicates = pd.DataFrame(considered_patients_duplicates)
+        df_non_duplicates = self.df_sin[~duplicated_mask]
+
+        self.df_sin = pd.concat(
+            [df_non_duplicates, df_considered_duplicates], ignore_index=True
+        )
+        self.df_sin.reset_index(drop=True, inplace=True)
 
         logging.info(
             f"Pacientes duplicados removidos. Total: {len(self.df_sin)}"
@@ -166,7 +221,7 @@ class Data:
         logging.info("Juntando as bases GAL e SINAN...")
 
         DATE_SIN_COLUMN = "DT_SIN_PRI"
-        DATE_GAL_COLUMN = "Data de Inicio dos Sintomas"
+        DATE_GAL_COLUMN = "Data do 1º Sintomas"
 
         # Define the maximum notification date difference (1 week)
         max_notification_date_diff = pd.Timedelta(days=7)
@@ -174,12 +229,13 @@ class Data:
 
         for _, row in self.df_sin.iterrows():
             results = self.df_gal[
-                (self.df_gal["Nome do Paciente"] == row["NM_PACIENT"])
+                (self.df_gal["Paciente"] == row["NM_PACIENT"])
                 & (self.df_gal["Data de Nascimento"] == row["DT_NASC"])
                 & (self.df_gal["Nome da Mãe"] == row["NM_MAE_PAC"])
             ]
             to_extend = []
             for _, result in results.iterrows():
+                # Check if the notification date is within the maximum notification date difference
                 if (
                     abs(result[DATE_GAL_COLUMN] - row[DATE_SIN_COLUMN])
                     <= max_notification_date_diff
@@ -205,13 +261,14 @@ class Data:
         logging.info(
             "Filtrando pacientes que irão ser usados para alimentar o SINAN..."
         )
-        if not self.df:
+        if self.df is None:
             raise Exception("Merged dataframe is not defined yet.")
 
         exams_map = {
             "Dengue, IgM": "IgM",
             "Dengue, Detecção de Antígeno NS1": "NS1",
             "Dengue, Biologia Molecular": "PCR",
+            "Pesquisa de Arbovírus (ZDC)": "PCR",
         }
 
         rules = {
@@ -241,7 +298,7 @@ class Data:
             self.df.apply(filter_content, axis=1, result_type="reduce")
         ]
         logging.info(
-            f"Total de pacientes para abeis para irem para o SINAN: {len(self.df)}"
+            f"Total de pacientes hábeis para irem para o SINAN: {len(self.df)}"
         )
 
     def clean_data(self):
@@ -249,8 +306,6 @@ class Data:
         Method to clean the data. It logs the start of the cleaning process, loads the data, logs the successful data load, and then iterates through a list of cleaning functions to clean the data.
         """
         logging.info("Iniciando a limpeza dos dados...")
-        self.load()
-        logging.info("Dados carregados.")
 
         cleaners = [
             self.__remove_duplicates,
@@ -268,34 +323,19 @@ class Data:
         # GAL
         print("Escolha o dataset do GAL para usar...")
         self.df_gal = self.__get_df()
-        self.df_gal["Nome do Paciente"] = self.df_gal["Nome do Paciente"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_gal["Nome da Mãe"] = self.df_gal["Nome da Mãe"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_gal["Data de Nascimento"] = pd.to_datetime(
-            self.df_gal["Data de Nascimento"]
-        )
-        self.df_gal["Data de Inicio dos Sintomas"] = pd.to_datetime(
-            self.df_gal["Data de Inicio dos Sintomas"]
-        )
-        self.df_gal["Data da Coleta"] = pd.to_datetime(
-            self.df_gal["Data da Coleta"]
+
+        normalize_columns(self.df_gal, ["Paciente", "Nome da Mãe"])
+        to_datetime(
+            self.df_gal,
+            ["Data de Nascimento", "Data do 1º Sintomas", "Data da Coleta"],
+            format="%d-%m-%Y",
         )
 
         # SINAN
         print("Escolha o dataset do SINAN para usar...")
         self.df_sin = self.__get_df()
-        self.df_sin["NM_PACIENT"] = self.df_sin["NM_PACIENT"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_sin["NM_MAE_PAC"] = self.df_sin["NM_MAE_PAC"].apply(
-            lambda x: normalize_name(x)
-        )
-        self.df_sin["DT_NASC"] = pd.to_datetime(self.df_sin["DT_NASC"])
-        self.df_sin["DT_SIN_PRI"] = pd.to_datetime(self.df_sin["DT_SIN_PRI"])
-
+        normalize_columns(self.df_sin, ["NM_PACIENT", "NM_MAE_PAC"])
+        to_datetime(self.df_sin, ["DT_NASC", "DT_SIN_PRI"])
         self.clean_data()
 
 
@@ -317,3 +357,8 @@ class Sinan:
     def _login(self): ...
 
     def fill(self): ...
+
+
+if __name__ == "__main__":
+    sinan = Sinan("usernane", "password")
+    sinan._get_data()
