@@ -1,3 +1,4 @@
 dados/*
 *.ipynb
 *.log
+**/*.html

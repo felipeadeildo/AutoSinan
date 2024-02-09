@@ -1,8 +1,9 @@
 import logging
 import os
 import re
+from datetime import datetime
 from pathlib import Path
-from typing import List
+from typing import List, Literal
 
 import pandas as pd
 import requests
@@ -14,6 +15,10 @@ logging.basicConfig(
     datefmt="%d/%m/%y %H:%M:%S",
     handlers=[logging.FileHandler("main.log"), logging.StreamHandler()],
 )
+
+BASE_URL = "http://sinan.saude.gov.br"
+TODAY = datetime.now()
+FIRST_YEAR_DAY = datetime(year=TODAY.year, month=1, day=1)
 
 
 def clear_screen():
@@ -289,9 +294,7 @@ class Data:
 
             rule = rules[exam_type]  # i believe that this will work
             elapsed_time = abs(
-                (
-                    row["Data dos Primeiros Sintomas"] - row["Data da Coleta"]
-                ).days
+                (row["Data do 1º Sintomas"] - row["Data da Coleta"])
             )
 
             return rule(elapsed_time)
@@ -341,6 +344,123 @@ class Data:
         self.clean_data()
 
 
+class ConsultarNotificacao:
+    """Consult a notification given a patient name
+
+    Args:
+        session (requests.Session): Requests session logged obj
+        agravo (str): Agravo to filter by (eg. A90 - DENGUE)
+
+    Methods:
+        consultar(self, patient: str): Consult a notification and return the response
+    """
+
+    def __init__(
+        self, session: requests.Session, agravo: Literal["A90 - DENGUE"]
+    ):
+        self.session = session
+        self.base_payload = {
+            "AJAXREQUEST": "_viewRoot",
+            "form": "form",
+            "form:consulta_tipoPeriodo": "0",
+            "form:consulta_dataInicialInputDate": FIRST_YEAR_DAY.strftime(
+                "%d/%m/%Y"
+            ),
+            "form:consulta_dataInicialInputCurrentDate": TODAY.strftime(
+                "%m/%Y"
+            ),
+            "form:consulta_dataFinalInputDate": TODAY.strftime("%d/%m/%Y"),
+            "form:consulta_dataFinalInputCurrentDate": TODAY.strftime("%m/%Y"),
+            "form:richagravocomboboxField": agravo,
+            "form:richagravo": agravo,
+            "form:tipoUf": "3",  # Notificação ou Residência
+            "form:consulta_uf": "24",  # SC
+            "form:tipoSaida": "2",  # Lista de Notificação
+            "form:consulta_tipoCampo": "0",
+            "form:consulta_municipio_uf_id": "0",
+            "form:j_id161": "Selecione valor no campo",
+        }
+        self.endpoint = (
+            f"{BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+        )
+
+    def __selecionar_agravo(self):
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:j_id108": "form:j_id108",
+                "AJAX:EVENTS_COUNT": "1",
+            }
+        )
+        self.session.post(self.endpoint, data=payload)
+
+    def __adicionar_criterio(self):
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:consulta_tipoCampo": "13",
+                "form:consulta_operador": "2",
+                "form:consulta_municipio_uf_id": "0",
+                "form:consulta_dsTextoPesquisa": self.paciente,
+                "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
+            }
+        )
+        payload.pop("form:j_id161", None)
+        self.session.post(self.endpoint, data=payload)
+
+    def __selecionar_criterio_campo(self):
+        CRITERIO = "Nome do paciente"
+
+        options = self.soup.find("select", {"id": "form:consulta_tipoCampo"}).find_all("option")  # type: ignore
+        tipo_campo = next(
+            (option for option in options if option.text.strip() == CRITERIO),
+            None,
+        )
+
+        if not tipo_campo:
+            logging.error(f"Criterio {CRITERIO} not found.")
+            exit(1)
+
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:consulta_tipoCampo": tipo_campo.get("value"),
+                "form:j_id136": "form:j_id136",
+                "ajaxSingle": "form:consulta_tipoCampo",
+            }
+        )
+        self.session.post(self.endpoint, data=payload)
+
+        self.__adicionar_criterio()
+
+    def __pesquisar(self):
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:btnPesquisar": "form:btnPesquisar",
+            }
+        )
+        res = self.session.post(self.endpoint, data=payload)
+        return res
+
+    def consultar(self, paciente: str):
+        self.paciente = paciente
+
+        res = self.session.get(self.endpoint)
+        self.soup = BeautifulSoup(res.content, "html.parser")
+        javax_faces = self.soup.find("input", {"name": "javax.faces.ViewState"})
+        if not javax_faces or isinstance(javax_faces, NavigableString):
+            logging.error("Java Faces not found.")
+            exit(1)
+
+        self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
+
+        self.__selecionar_agravo()
+        self.__selecionar_criterio_campo()
+        res = self.__pesquisar()
+        return res
+
+
 class Sinan:
     """Sinan client taht will be used to interact with the Sinan Website doing things like:
     - Login
@@ -351,7 +471,6 @@ class Sinan:
     def __init__(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
-        self.BASE = "https://sinan.saude.gov.br"
 
     def _get_data(self):
         self.data = Data()
@@ -369,11 +488,18 @@ class Sinan:
             }
         )
 
+    def __verify_login(self, res: requests.Response):
+        soup = BeautifulSoup(res.content, "html.parser")
+        if not soup.find("div", {"id": "detalheUsuario"}):
+            logging.error("Login failed.")
+            exit(1)
+
     def _login(self):
+        logging.info("Logando no SINAN...")
         self.__create_session()
 
         # set JSESSIONID
-        res = self.session.get(f"{self.BASE}/sinan/login/login.jsf")
+        res = self.session.get(f"{BASE_URL}/sinan/login/login.jsf")
 
         soup = BeautifulSoup(res.content, "html.parser")
         form = soup.find("form")
@@ -392,16 +518,22 @@ class Sinan:
             payload[name] = value
 
         res = self.session.post(
-            f"{self.BASE}{form.get('action')}",
+            f"{BASE_URL}{form.get('action')}",
             data=payload,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
+        self.__verify_login(res)
+        logging.info("Logado com sucesso.")
 
-        # self.__verify_login(res)
+    def __consult_patient(self, patient: str):
+        consultor = ConsultarNotificacao(self.session, "A90 - DENGUE")
+        consultor.consultar(patient)
 
-    def fill(self): ...
+    def fill(self):
+        self._login()
+        # for patient in patients: self.__consult_patient(patient) # TODO
 
 
 if __name__ == "__main__":
-    sinan = Sinan("usernane", "password")
-    sinan._get_data()
+    sinan = Sinan("username", "password")
+    sinan.fill()
