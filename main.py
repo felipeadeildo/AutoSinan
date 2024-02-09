@@ -5,6 +5,8 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup, NavigableString
 
 logging.basicConfig(
     level=logging.DEBUG,
@@ -349,12 +351,53 @@ class Sinan:
     def __init__(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
+        self.BASE = "https://sinan.saude.gov.br"
 
     def _get_data(self):
         self.data = Data()
         self.data.load()
 
-    def _login(self): ...
+    def __create_session(self):
+        self.session = requests.session()
+        self.session.headers.update(
+            {
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/121.0.0.0 Safari/537.36"
+                )
+            }
+        )
+
+    def _login(self):
+        self.__create_session()
+
+        # set JSESSIONID
+        res = self.session.get(f"{self.BASE}/sinan/login/login.jsf")
+
+        soup = BeautifulSoup(res.content, "html.parser")
+        form = soup.find("form")
+        if not form or isinstance(form, NavigableString):
+            logging.error("Login Form not found.")
+            exit(1)
+
+        inputs = form.find_all("input")
+        payload = dict()
+        for input_ in inputs:
+            name, value = input_.get("name"), input_.get("value")
+            if "username" in name:
+                value = self._username
+            elif "password" in name:
+                value = self._password
+            payload[name] = value
+
+        res = self.session.post(
+            f"{self.BASE}{form.get('action')}",
+            data=payload,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+
+        # self.__verify_login(res)
 
     def fill(self): ...
 
