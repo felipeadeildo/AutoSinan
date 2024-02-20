@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import re
@@ -471,6 +472,7 @@ class Sinan:
     def __init__(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
+        self.__init_apps()
 
     def _get_data(self):
         self.data = Data()
@@ -487,6 +489,15 @@ class Sinan:
                 )
             }
         )
+
+    def __create_consultor(self):
+        self.consultor = ConsultarNotificacao(self.session, "A90 - DENGUE")
+
+    def __init_apps(self):
+        apps = [self.__create_session, self.__create_consultor]
+
+        for app in apps:
+            app()
 
     def __verify_login(self, res: requests.Response):
         soup = BeautifulSoup(res.content, "html.parser")
@@ -526,8 +537,7 @@ class Sinan:
         logging.info("Logado com sucesso.")
 
     def __consult_patient(self, patient: str):
-        consultor = ConsultarNotificacao(self.session, "A90 - DENGUE")
-        consultor.consultar(patient)
+        self.consultor.consultar(patient)
 
     def fill(self):
         self._login()
@@ -535,5 +545,17 @@ class Sinan:
 
 
 if __name__ == "__main__":
-    sinan = Sinan("username", "password")
+    credentials_path = Path("credentials.json")
+    if credentials_path.exists():
+        with credentials_path.open() as f:
+            credentials = json.load(f)
+    else:
+        credentials = {
+            "username": input("Seu usuário: "),
+            "password": input("Sua senha: "),
+        }
+        with credentials_path.open("w") as f:
+            json.dump(credentials, f, indent=4)
+
+    sinan = Sinan(**credentials)
     sinan.fill()

@@ -2,3 +2,4 @@ dados/*
 *.ipynb
 *.log
 **/*.html
+credentials.json
