@@ -3,3 +3,4 @@ dados/*
 *.log
 **/*.html
 credentials.json
+__pycache__/
