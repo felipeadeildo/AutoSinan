@@ -23,21 +23,26 @@ class InvestigationBot(Bot):
         self._init_apps()
 
     def __create_data_manager(self):
+        """Load data from SINAN and GAL datasets"""
         self.data = SinanGalData()
         self.data.load()
 
     def __create_session(self):
+        """Create a session agent that will be used to make requests"""
         self.session = requests.session()
         self.session.headers.update({"User-Agent": USER_AGENT})
 
     def __create_notification_researcher(self):
+        """Create a notification searcher that will be used to research notifications given a patient"""
         # TODO: move the agravo to a settings.toml file
         self.researcher = NotificationResearcher(self.session, "A90 - DENGUE")
 
     def __create_investigator(self):
+        """Create an Investigator that will be used to investigate (fill data)"""
         self.investigator = Investigator(self.session)
 
     def _init_apps(self):
+        """Factory method to initialize the apps"""
         initializators = [
             self.__create_session,
             self.__create_notification_researcher,
@@ -49,6 +54,11 @@ class InvestigationBot(Bot):
             fn()
 
     def __verify_login(self, res: requests.Response):
+        """Verify if the login was successful
+
+        Args:
+            res (requests.Response): The response from the sinan website
+        """
         soup = BeautifulSoup(res.content, "html.parser")
         if not soup.find("div", {"id": "detalheUsuario"}):
             print("Login failed.")
@@ -60,6 +70,7 @@ class InvestigationBot(Bot):
             setattr(app, "session", self.session)
 
     def _login(self):
+        """Login to the Sinan Website"""
         print("Logando no SINAN...")
         self.__create_session()
 

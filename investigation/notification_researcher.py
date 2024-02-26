@@ -48,6 +48,7 @@ class NotificationResearcher:
         )
 
     def __selecionar_agravo(self):
+        """Send the payload to select the agravo"""
         payload = self.base_payload.copy()
         payload.update(
             {
@@ -58,6 +59,7 @@ class NotificationResearcher:
         self.session.post(self.endpoint, data=payload)
 
     def __adicionar_criterio(self):
+        """Send the payload to add a filter criterion"""
         payload = self.base_payload.copy()
         payload.update(
             {
@@ -72,6 +74,7 @@ class NotificationResearcher:
         self.session.post(self.endpoint, data=payload)
 
     def __selecionar_criterio_campo(self):
+        """Send the payload to select the filter criterion field (`Nome do paciente`)"""
         CRITERIO = "Nome do paciente"
 
         options = self.soup.find("select", {"id": "form:consulta_tipoCampo"}).find_all("option")  # type: ignore
@@ -97,6 +100,11 @@ class NotificationResearcher:
         self.__adicionar_criterio()
 
     def __pesquisar(self):
+        """Send the payload to search the notification given the patient name
+
+        Returns:
+            requests.Response: The response from the Sinan website
+        """
         payload = self.base_payload.copy()
         payload.update(
             {

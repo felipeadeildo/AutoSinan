@@ -79,6 +79,15 @@ def to_datetime(df: pd.DataFrame, columns: List[str], **kw):
 
 
 def valid_tag(tag: Tag | NavigableString | None) -> Tag | None:
+    """Verify if a "tag" from BeautifulSoup is valid
+
+    Args:
+        tag (Tag | NavigableString | None): Tag provided by `BeautifulSoup.find()`
+            or `BeautifulSoup.find_all()`
+
+    Returns:
+        Tag | None: Tag if valid, None otherwise
+    """
     if not tag or isinstance(tag, NavigableString):
         return None
     return tag
