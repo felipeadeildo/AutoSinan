@@ -3,18 +3,19 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.constants import DATA_FOLDER
+from core.constants import DATA_FOLDER, EXAMS_GAL_MAP
 from core.utils import clear_screen, load_data, normalize_columns, to_datetime
 
 
 class SinanGalData:
     """Loads and clean the data from GAL and Sinan sources applying some filter rules."""
 
+    df: pd.DataFrame
+
     def __init__(self):
         self.__datafolder = Path(DATA_FOLDER)
         if not self.__datafolder.exists():
             self.__datafolder.mkdir()
-        self.df = None
 
     def __choice_datasets(self):
         """
@@ -188,13 +189,6 @@ class SinanGalData:
         if self.df is None:
             raise Exception("Merged dataframe is not defined yet.")
 
-        exams_map = {
-            "Dengue, IgM": "IgM",
-            "Dengue, Detecção de Antígeno NS1": "NS1",
-            "Dengue, Biologia Molecular": "PCR",
-            "Pesquisa de Arbovírus (ZDC)": "PCR",
-        }
-
         rules = {
             "IgM": lambda time: time >= pd.Timedelta(days=6),
             "NS1": lambda time: time <= pd.Timedelta(days=5),
@@ -202,7 +196,7 @@ class SinanGalData:
         }
 
         def filter_content(row: pd.Series) -> bool:
-            exam_type = exams_map.get(row["Exame"])
+            exam_type = EXAMS_GAL_MAP.get(row["Exame"])
             if not exam_type:
                 print(
                     f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente."
