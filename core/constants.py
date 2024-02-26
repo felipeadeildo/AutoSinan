@@ -1,4 +1,5 @@
 import datetime as dt
+from typing import Literal
 
 SINAN_BASE_URL = "http://sinan.saude.gov.br"  # protocol http
 """Base url for Sinan Website."""
@@ -24,3 +25,12 @@ CREDENTIALS_FILE = "credentials.json"
 
 DATA_FOLDER = "dados"
 """Folder name to store the datasets used by the bots."""
+
+
+EXAMS_GAL_MAP: dict[str, Literal["IgM", "NS1", "PCR"]] = {
+    "Dengue, IgM": "IgM",
+    "Dengue, Detecção de Antígeno NS1": "NS1",
+    "Dengue, Biologia Molecular": "PCR",
+    "Pesquisa de Arbovírus (ZDC)": "PCR",
+}
+"""Exam mapping for the Gal dataset."""
