@@ -26,6 +26,7 @@ class InvestigationBot(Bot):
         """Load data from SINAN and GAL datasets"""
         self.data = SinanGalData()
         self.data.load()
+        # self.data.df.to_excel("base_unificada.xlsx", index=False)
 
     def __create_session(self):
         """Create a session agent that will be used to make requests"""
@@ -104,14 +105,17 @@ class InvestigationBot(Bot):
     def start(self):
         self._login()
 
-        patients = []  # TODO: get this from the data loader
-        for patient_name in patients:
-            sinan_response = self.researcher.search(patient_name)
+        for _, patient in self.data.df.iterrows():
+            sinan_response = self.researcher.search(patient["NM_PACIENT"])
             match len(sinan_response):
                 case 0:
                     print("Nenhum resultado encontrado.")
                 case 1:
                     sinan_response = next(iter(sinan_response))
-                    self.investigator.investigate({}, sinan_response)
+                    self.investigator.investigate(
+                        patient.to_dict(), sinan_response
+                    )
                 case _:
                     print("Múltiplos resultados encontrados:")
+            # TODO: this break is just for test, remove this after
+            break
