@@ -17,6 +17,7 @@ dbfread = "^2.0.7"
 
 [tool.poetry.group.dev.dependencies]
 icecream = "^2.1.3"
+ipython = "^8.22.1"
 
 [build-system]
 requires = ["poetry-core"]
