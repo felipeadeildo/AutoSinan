@@ -1,10 +1,16 @@
-import json
-from typing import Optional
+import re
+from typing import Mapping, Optional
 
 import requests
 from bs4 import BeautifulSoup
 
-from core.constants import EXAMS_GAL_MAP, SINAN_BASE_URL
+from core.constants import (
+    EXAM_RESULT_ID,
+    EXAM_VALUE_COL_MAP,
+    EXAMS_GAL_MAP,
+    POSSIBLE_EXAM_TYPES,
+    SINAN_BASE_URL,
+)
 from core.utils import valid_tag
 
 
@@ -58,6 +64,45 @@ class Investigator:
 
         return {**inputs, **selects}
 
+    def __submit_modal_ok(self, form_payload: dict):
+        """Click in "Ok" buttom if modal appears in the response"""
+
+        show_modal_script = next(
+            (
+                s
+                for s in self.soup.find_all("script")
+                if s.text.strip().endswith(".component.show();")
+            ),
+            None,
+        )
+        if not show_modal_script:
+            print("Script to show modal not found.")
+            return
+
+        show_modal_text = "".join(show_modal_script.text.split("\n")).strip()
+
+        modal_id_match = re.search(
+            r"getElementById\(['\"]([^'\"]+)['\"]\)", show_modal_text
+        )
+        if not modal_id_match:
+            print("Error: Modal id not found")
+            raise ValueError("Modal id not found")
+
+        modal_id = modal_id_match.group(1)
+        payload_modal_ok = self.__get_form_data("div", {"id": modal_id})
+        payload_modal_ok = {
+            k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
+        }
+        form_payload.pop("form:botaoSalvar", None)
+        form_final = form_payload.copy()
+        form_final.update(payload_modal_ok)
+
+        response = self.session.post(
+            self.notification_endpoint, data=form_final
+        )
+
+        self.soup = BeautifulSoup(response.content, "html.parser")
+
     def __enable_and_open_investigation(self, form_data: dict):
         """Enable the investigation aba and open it (the response form)
 
@@ -83,108 +128,126 @@ class Investigator:
         response = self.session.post(self.notification_endpoint, data=payload)
         self.soup = BeautifulSoup(response.content, "html.parser")
 
+        first_investigation_input = valid_tag(
+            self.soup.find(
+                "input", attrs={"id": "form:dtInvestigacaoInputDate"}
+            )
+        )
+        # when there is no investigation form, so probabilly exists a modal being shown
+        if not first_investigation_input:
+            try:
+                self.__submit_modal_ok(payload)
+            except ValueError:
+                # TODO: handle modal not found
+                pass
+
     def __get_payload_exam_result(
         self, patient_data: dict, current_payload: dict
     ) -> Optional[dict]:
+        """Get the payload with the exam result which is one of the options in the Sinan Investigation Form.
+
+        Args:
+            patient_data (dict): The patient data from the data loader
+            current_payload (dict): The current payload from the form
+
+        Returns:
+            Optional[dict]: The current payload updated with the exam result
+        """
         exam_type = EXAMS_GAL_MAP[patient_data["Exame"]]
+        exam_result_map = EXAM_RESULT_ID[exam_type]
         local_payload = current_payload.copy()
         formatted_collection_date = patient_data["Data da Coleta"].strftime(
             "%d/%m/%Y"
         )
-        match exam_type:
-            case "PCR":
-                patient_data_result_column = "Dengue"
-                payload_collection_date_column = (
-                    "form:dengue_dataColetaRTPCRInputDate"
-                )
-                payload_collection_result_column = "form:dengue_resultadoRTPCR"
-                exam_result = str(patient_data[patient_data_result_column])
-                exam_result_map = {
-                    "Não Detectável": "2",  # Negativo
-                    "Detectável": "1",  # Positivo
-                    "_default": "3",  # Inconclusivo
-                }
-                payload_exam_result = exam_result_map.get(
-                    exam_result, exam_result_map["_default"]
-                )
 
-                # select the sorotype
+        if exam_type == "PCR":
+            patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
+            payload_collection_date_column = (
+                "form:dengue_dataColetaRTPCRInputDate"
+            )
+            payload_collection_result_column = "form:dengue_resultadoRTPCR"
+            exam_result = str(patient_data[patient_data_result_column])
+            payload_exam_result = exam_result_map.get(
+                exam_result, exam_result_map["_default"]
+            )
+
+            # select the sorotype
+            local_payload.update(
+                {
+                    payload_collection_date_column: formatted_collection_date,
+                    payload_collection_result_column: payload_exam_result,
+                    "form:j_id572": "form:j_id572",
+                }
+            )
+            # allow the "47 - sorotipo" to be selected
+            self.session.post(self.notification_endpoint, data=local_payload)
+            local_payload.pop("form:j_id572")
+
+            if payload_exam_result == "1":
+                sorotype_dengue = patient_data["Sorotipo"].removeprefix(
+                    "DENV"
+                )  # DENV1, DENV2, etc
                 local_payload.update(
                     {
-                        payload_collection_date_column: formatted_collection_date,
-                        payload_collection_result_column: payload_exam_result,
-                        "form:j_id572": "form:j_id572",
+                        "form:dengue_sorotipo": sorotype_dengue,
+                        "form:j_id577": "form:j_id577",
                     }
                 )
-                # allow the "47 - sorotipo" to be selected
+                # save the sorotype
                 self.session.post(
                     self.notification_endpoint, data=local_payload
                 )
-                local_payload.pop("form:j_id572")
+                local_payload.pop("form:j_id577")
 
-                if payload_exam_result == "1":
-                    sorotype_dengue = patient_data["Sorotipo"].removeprefix(
-                        "DENV"
-                    )  # DENV1, DENV2, etc
-                    local_payload.update(
-                        {
-                            "form:dengue_sorotipo": sorotype_dengue,
-                            "form:j_id577": "form:j_id577",
-                        }
-                    )
-                    # save the sorotype
-                    self.session.post(
-                        self.notification_endpoint, data=local_payload
-                    )
-                    local_payload.pop("form:j_id577")
+        elif exam_type == "IgM":
+            patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
+            payload_collection_date_column = (
+                "form:dengue_dataColetaExameSorologicoInputDate"
+            )
+            payload_collection_result_column = (
+                "form:dengue_resultadoExameSorologico"
+            )
+            exam_result = str(patient_data[patient_data_result_column])
+            payload_exam_result = exam_result_map.get(exam_result)
+            if not payload_exam_result:
+                return print("Não foi possível definir o resultado do exame.")
 
-            case "IgM":
-                patient_data_result_column = "Resultado"
-                payload_collection_date_column = (
-                    "form:dengue_dataColetaExameSorologicoInputDate"
-                )
-                payload_collection_result_column = (
-                    "form:dengue_resultadoExameSorologico"
-                )
-                exam_result = str(patient_data[patient_data_result_column])
-                exam_result_map = {
-                    "Não Reagente": "2",  # Não Reagente
-                    "Reagente": "1",  # Reagente
-                    "Indeterminado": "3",  # Inconclusivo
+            local_payload.update(
+                {
+                    payload_collection_date_column: formatted_collection_date,
+                    payload_collection_result_column: payload_exam_result,
                 }
-                payload_exam_result = exam_result_map.get(exam_result)
-                if not payload_exam_result:
-                    return print(
-                        "Não foi possível definir o resultado do exame."
-                    )
+            )
 
-                local_payload.update(
-                    {
-                        payload_collection_date_column: formatted_collection_date,
-                        payload_collection_result_column: payload_exam_result,
-                    }
-                )
-            case "NS1":
-                patient_data_result_column = "Resultado"
-                payload_collection_date_column = (
-                    "form:dengue_dataColetaNS1InputDate"
-                )
-                patient_data_result_column = "form:dengue_resultadoNS1"
-                exam_result = patient_data[patient_data_result_column]
-                exam_result_map = {
-                    "Reagente": "1",  # Positivo
-                    "Não Reagente": "2",  # Negativo
-                    "Indeterminado": "3",  # Inconclusivo
+        elif exam_type == "NS1":
+            patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
+            payload_collection_date_column = (
+                "form:dengue_dataColetaNS1InputDate"
+            )
+            payload_collection_result_column = "form:dengue_resultadoNS1"
+            exam_result = patient_data[patient_data_result_column]
+            payload_exam_result = exam_result_map[exam_result]
+            local_payload.update(
+                {
+                    payload_collection_date_column: formatted_collection_date,
+                    payload_collection_result_column: payload_exam_result,
                 }
-                payload_exam_result = exam_result_map[exam_result]
-                local_payload.update(
-                    {
-                        payload_collection_date_column: formatted_collection_date,
-                        patient_data_result_column: payload_exam_result,
-                    }
-                )
+            )
 
         return local_payload
+
+    def __select_classification(self, patient_data: dict, payload_base: dict):
+        exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
+            "IgM": payload_base.get("form:dengue_resultadoExameSorologico"),
+            "NS1": payload_base.get("form:dengue_resultadoNS1"),
+            "PCR": payload_base.get("form:dengue_resultadoRTPCR"),
+        }
+
+        # TODO: The idea is apply a any(result.is_positive for result in result), if any is true, then the classification is positive, else negative
+        # I have the "EXAM_RESULT_ID" map that contains the ID of the classification, I need define which classification is positive.
+        # classifications = []
+        # for exam_type, result in exam_results.items():
+        #     possible_classifications = CLASSSIFICATION_MAP[exam_type]
 
     def __fill_patient_data(self, patient_data: dict):
         payload_base = {
@@ -211,8 +274,8 @@ class Investigator:
         if not payload_exam_result:
             return
         payload_base.update(payload_exam_result)
-        # dev::verificate:
-        print(json.dumps(payload_base, indent=4))
+
+        self.__select_classification(patient_data, payload_base)
 
     def investigate(
         self,
@@ -236,6 +299,7 @@ class Investigator:
         if not self._javax_view_state:
             print("Não foi possível obter o javax.faces.ViewState.")
             return
+
         self._javax_view_state = self._javax_view_state.get("value")
 
         form_data = self.__get_form_data()
