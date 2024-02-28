@@ -4,3 +4,5 @@ dados/*
 **/*.html
 credentials.json
 __pycache__/
+*.xlsx*
+*.json
