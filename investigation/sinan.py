@@ -1,3 +1,4 @@
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
@@ -48,7 +49,7 @@ class InvestigationBot(Bot):
             self.__create_session,
             self.__create_notification_researcher,
             self.__create_investigator,
-            self.__create_data_manager,
+            # self.__create_data_manager,
         ]
 
         for fn in initializators:
@@ -102,20 +103,30 @@ class InvestigationBot(Bot):
         self.__verify_login(res)
         print("Logado com sucesso.")
 
+    def __fill_form(self, patient: pd.Series):
+        """Fill out the form with the patient data
+
+        Args:
+            patient (dict): The patient data
+        """
+        print("Paciente:", patient["NM_PACIENT"])
+        sinan_response = self.researcher.search(patient["NM_PACIENT"])
+        match len(sinan_response):
+            case 0:
+                print("Nenhum resultado encontrado.")
+            case 1:
+                sinan_response = next(iter(sinan_response))  # type: ignore
+                self.investigator.investigate(patient.to_dict(), sinan_response)
+            case _:
+                print("Múltiplos resultados encontrados!")
+
     def start(self):
         self._login()
 
+        # TODO: remove this after, its for testing
+        # df = pd.read_excel("base_unificada.xlsx")
+        # patient = df.loc[df["NM_PACIENT"] == "AIN"]
+        # self.__fill_form(patient.iloc[0])
+
         for _, patient in self.data.df.iterrows():
-            sinan_response = self.researcher.search(patient["NM_PACIENT"])
-            match len(sinan_response):
-                case 0:
-                    print("Nenhum resultado encontrado.")
-                case 1:
-                    sinan_response = next(iter(sinan_response))
-                    self.investigator.investigate(
-                        patient.to_dict(), sinan_response
-                    )
-                case _:
-                    print("Múltiplos resultados encontrados:")
-            # TODO: this break is just for test, remove this after
-            break
+            self.__fill_form(patient)
