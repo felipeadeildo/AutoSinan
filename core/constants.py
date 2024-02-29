@@ -56,7 +56,7 @@ CLASSSIFICATION_MAP: Mapping[POSSIBLE_EXAM_TYPES, Mapping[str, str | None]] = {
         "_default": None,
     },
     "NS1": {
-        "Não Reagente": "5",
+        "Não Reagente": None,
         "Reagente": "10",
         "Indeterminado": None,
     },
