@@ -5,11 +5,13 @@ import requests
 from bs4 import BeautifulSoup
 
 from core.constants import (
+    CLASSSIFICATION_MAP,
     EXAM_RESULT_ID,
     EXAM_VALUE_COL_MAP,
     EXAMS_GAL_MAP,
     POSSIBLE_EXAM_TYPES,
     SINAN_BASE_URL,
+    TODAY,
 )
 from core.utils import valid_tag
 
@@ -64,7 +66,7 @@ class Investigator:
 
         return {**inputs, **selects}
 
-    def __submit_modal_ok(self, form_payload: dict):
+    def __submit_modal_ok(self):
         """Click in "Ok" buttom if modal appears in the response"""
 
         show_modal_script = next(
@@ -93,25 +95,24 @@ class Investigator:
         payload_modal_ok = {
             k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
         }
-        form_payload.pop("form:botaoSalvar", None)
-        form_final = form_payload.copy()
-        form_final.update(payload_modal_ok)
+        self.current_form.pop("form:botaoSalvar", None)
 
         response = self.session.post(
-            self.notification_endpoint, data=form_final
+            self.notification_endpoint,
+            data={**self.current_form, **payload_modal_ok},
         )
 
         self.soup = BeautifulSoup(response.content, "html.parser")
 
-    def __enable_and_open_investigation(self, form_data: dict):
+    def __enable_and_open_investigation(self):
         """Enable the investigation aba and open it (the response form)
 
         Args:
             form_data (dict): The patient form data to open investigation
         """
-        payload = {
+        self.current_form = {
             k: v
-            for k, v in form_data.items()
+            for k, v in self.current_form.items()
             if k
             and not k.startswith(
                 (
@@ -120,12 +121,16 @@ class Investigator:
                 )
             )
         }
-        payload.update(
+        self.current_form.update(
             {
-                "form:richagravo": payload["form:richagravocomboboxField"],
+                "form:richagravo": self.current_form[
+                    "form:richagravocomboboxField"
+                ],
             }
         )
-        response = self.session.post(self.notification_endpoint, data=payload)
+        response = self.session.post(
+            self.notification_endpoint, data=self.current_form
+        )
         self.soup = BeautifulSoup(response.content, "html.parser")
 
         first_investigation_input = valid_tag(
@@ -136,29 +141,24 @@ class Investigator:
         # when there is no investigation form, so probabilly exists a modal being shown
         if not first_investigation_input:
             try:
-                self.__submit_modal_ok(payload)
+                self.__submit_modal_ok()
             except ValueError:
                 # TODO: handle modal not found
                 pass
 
-    def __get_payload_exam_result(
-        self, patient_data: dict, current_payload: dict
-    ) -> Optional[dict]:
-        """Get the payload with the exam result which is one of the options in the Sinan Investigation Form.
+    def __define_exam_result_data(self):
+        """Get the payload with the exam result which is one of the options in the Sinan Investigation Form and fill the exam result.
 
-        Args:
-            patient_data (dict): The patient data from the data loader
-            current_payload (dict): The current payload from the form
-
-        Returns:
-            Optional[dict]: The current payload updated with the exam result
+        Possible Inputs that can be filled:
+            39, 41, 45 - Data da Coleta,
+            40, 42, 46 - Resultado,
+            47 - Sorotipo
         """
-        exam_type = EXAMS_GAL_MAP[patient_data["Exame"]]
+        exam_type = EXAMS_GAL_MAP[self.patient_data["Exame"]]
         exam_result_map = EXAM_RESULT_ID[exam_type]
-        local_payload = current_payload.copy()
-        formatted_collection_date = patient_data["Data da Coleta"].strftime(
-            "%d/%m/%Y"
-        )
+        formatted_collection_date = self.patient_data[
+            "Data da Coleta"
+        ].strftime("%d/%m/%Y")
 
         if exam_type == "PCR":
             patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
@@ -166,38 +166,41 @@ class Investigator:
                 "form:dengue_dataColetaRTPCRInputDate"
             )
             payload_collection_result_column = "form:dengue_resultadoRTPCR"
-            exam_result = str(patient_data[patient_data_result_column])
+            exam_result = str(self.patient_data[patient_data_result_column])
             payload_exam_result = exam_result_map.get(
                 exam_result, exam_result_map["_default"]
             )
 
             # select the sorotype
-            local_payload.update(
+            self.current_form.update(
                 {
                     payload_collection_date_column: formatted_collection_date,
                     payload_collection_result_column: payload_exam_result,
-                    "form:j_id572": "form:j_id572",
                 }
             )
             # allow the "47 - sorotipo" to be selected
-            self.session.post(self.notification_endpoint, data=local_payload)
-            local_payload.pop("form:j_id572")
+            self.session.post(
+                self.notification_endpoint,
+                data={**self.current_form, "form:j_id572": "form:j_id572"},
+            )
 
             if payload_exam_result == "1":
-                sorotype_dengue = patient_data["Sorotipo"].removeprefix(
+                sorotype_dengue = self.current_form["Sorotipo"].removeprefix(
                     "DENV"
                 )  # DENV1, DENV2, etc
-                local_payload.update(
+                self.current_form.update(
                     {
                         "form:dengue_sorotipo": sorotype_dengue,
-                        "form:j_id577": "form:j_id577",
                     }
                 )
                 # save the sorotype
                 self.session.post(
-                    self.notification_endpoint, data=local_payload
+                    self.notification_endpoint,
+                    data={
+                        **self.current_form,
+                        "form:j_id577": "form:j_id577",
+                    },
                 )
-                local_payload.pop("form:j_id577")
 
         elif exam_type == "IgM":
             patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
@@ -207,12 +210,15 @@ class Investigator:
             payload_collection_result_column = (
                 "form:dengue_resultadoExameSorologico"
             )
-            exam_result = str(patient_data[patient_data_result_column])
+            exam_result = str(self.patient_data[patient_data_result_column])
             payload_exam_result = exam_result_map.get(exam_result)
-            if not payload_exam_result:
-                return print("Não foi possível definir o resultado do exame.")
 
-            local_payload.update(
+            if not payload_exam_result:
+                raise Exception(
+                    "Não foi possível definir o resultado do exame."
+                )
+
+            self.current_form.update(
                 {
                     payload_collection_date_column: formatted_collection_date,
                     payload_collection_result_column: payload_exam_result,
@@ -225,32 +231,112 @@ class Investigator:
                 "form:dengue_dataColetaNS1InputDate"
             )
             payload_collection_result_column = "form:dengue_resultadoNS1"
-            exam_result = patient_data[patient_data_result_column]
+            exam_result = self.patient_data[patient_data_result_column]
             payload_exam_result = exam_result_map[exam_result]
-            local_payload.update(
+            self.current_form.update(
                 {
                     payload_collection_date_column: formatted_collection_date,
                     payload_collection_result_column: payload_exam_result,
                 }
             )
 
-        return local_payload
-
-    def __select_classification(self, patient_data: dict, payload_base: dict):
+    def __select_classification(self):
+        """Select the classification based on the exam results (62 - Classificação)"""
         exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
-            "IgM": payload_base.get("form:dengue_resultadoExameSorologico"),
-            "NS1": payload_base.get("form:dengue_resultadoNS1"),
-            "PCR": payload_base.get("form:dengue_resultadoRTPCR"),
+            "IgM": self.current_form["form:dengue_resultadoExameSorologico"],
+            "NS1": self.current_form["form:dengue_resultadoNS1"],
+            "PCR": self.current_form["form:dengue_resultadoRTPCR"],
         }
 
-        # TODO: The idea is apply a any(result.is_positive for result in result), if any is true, then the classification is positive, else negative
-        # I have the "EXAM_RESULT_ID" map that contains the ID of the classification, I need define which classification is positive.
-        # classifications = []
-        # for exam_type, result in exam_results.items():
-        #     possible_classifications = CLASSSIFICATION_MAP[exam_type]
+        classifications = []
+        for exam_type, result in exam_results.items():
+            possible_classifications = CLASSSIFICATION_MAP[exam_type]
+            possible_exam_results = EXAM_RESULT_ID[exam_type]
+            classification_key = next(
+                (k for k, v in possible_exam_results.items() if v == result)
+            )
+            classification = possible_classifications[classification_key]
+            classifications.append(classification)
 
-    def __fill_patient_data(self, patient_data: dict):
-        payload_base = {
+        if any(map(lambda k: k == "10", classifications)):
+            self.current_form.update({"form:dengue_classificacao": "10"})
+        else:
+            self.current_form.update({"form:dengue_classificacao": "5"})
+
+        self.session.post(
+            self.notification_endpoint,
+            data={**self.current_form, "form:j_id713": "form:j_id713"},
+        )
+
+    def __select_criteria(self):
+        """Select the confirmation criteria (63 - Critério de Confirmação)"""
+        self.current_form.update({"form:dengue_criterio": "1"})
+        self.session.post(
+            self.notification_endpoint,
+            data={**self.current_form, "form:j_id718": "form:j_id718"},
+        )
+
+    def __define_closing_date(self):
+        """Insert the value of the closing date (67 - Data de Encerramento)"""
+        self.current_form.update(
+            {
+                "form:dengue_dataEncerramentoInputDate": TODAY.strftime(
+                    "%d/%m/%Y"
+                )
+            }
+        )
+        self.session.post(
+            self.notification_endpoint,
+            data={**self.current_form, "form:j_id739": "form:j_id739"},
+        )
+
+    def __define_investigation_date(self):
+        """Define the investigation date (31 - Data da Investigação)"""
+        self.current_form.update(
+            {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
+        )
+        self.session.post(
+            self.notification_endpoint,
+            data={**self.current_form, "form:j_id402": "form:j_id402"},
+        )
+
+    def __select_clinical_signs(self):
+        """Select the clinical signs (33 - Sinais Clinicos)"""
+        self.current_form.update(
+            {
+                k: (
+                    (self.current_form[v] or "2")
+                    if not self.force_clinal_signs_and_illnesses
+                    else "2"
+                )
+                for k, v in self.current_form.items()
+                if k.startswith("form:chikungunya_sinais")
+            }
+        )
+
+    def __select_illnesses(self):
+        """Select the illnesses (34 - Doencas Pré-existentes)"""
+        self.current_form.update(
+            {
+                k: (
+                    (self.current_form[v] or "2")
+                    if not self.force_clinal_signs_and_illnesses
+                    else "2"
+                )
+                for k, v in self.current_form.items()
+                if k.startswith("form:chikungunya_doencas")
+            }
+        )
+
+    def __save_investigation(self):
+        """Save the Investigation filled form date and submit it."""
+        self.current_form.update(
+            {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
+        )
+        self.session.post(self.notification_endpoint, data=self.current_form)
+
+    def __fill_patient_data(self):
+        self.current_form = {
             "AJAXREQUEST": "_viewRoot",
             "form": "form",
             "form:dengue_obeservacoes": "",
@@ -258,24 +344,56 @@ class Investigator:
             "javax.faces.ViewState": self._javax_view_state,
         }
 
-        payload_base.update(
+        self.current_form.update(
             self.__get_form_data(attrs={"id": "form:tabPanelNotificacao"})
         )
 
-        payload_base = {
+        self.current_form = {
             k: v
-            for k, v in payload_base.items()
+            for k, v in self.current_form.items()
             if not k.startswith(("form:j_id8", "form:btn"))
         }
 
-        payload_exam_result = self.__get_payload_exam_result(
-            patient_data, payload_base
-        )
-        if not payload_exam_result:
-            return
-        payload_base.update(payload_exam_result)
+        factory_form_builders = [
+            self.__define_exam_result_data,
+            self.__define_investigation_date,
+            self.__select_classification,
+            self.__select_criteria,
+            self.__define_closing_date,
+            self.__select_clinical_signs,
+            self.__select_illnesses,
+        ]
 
-        self.__select_classification(patient_data, payload_base)
+        for builder in factory_form_builders:
+            builder()
+
+        # TODO: uncomment this and test.
+        # self.__save_investigation()
+
+    def __get_javafaces_view_state(self):
+        """Get the javax.faces.ViewState tag from the current page"""
+        self._javax_view_state = valid_tag(
+            self.soup.find(attrs={"name": "javax.faces.ViewState"})
+        )
+
+        if not self._javax_view_state:
+            print("Não foi possível obter o javax.faces.ViewState.")
+            return
+
+        self._javax_view_state = self._javax_view_state.get("value")
+
+    def __open_investigation_page(self, sinan_response: dict):
+        """Open the investigation page
+
+        Args:
+            sinan_response (dict): The payload to open the investigation (from the Sinan Researcher class)
+        """
+        response = self.session.post(
+            self.open_investigation_endpoint,
+            data=sinan_response["open_payload"],
+        )
+        self.soup = BeautifulSoup(response.content, "html.parser")
+        self.__get_javafaces_view_state()
 
     def investigate(
         self,
@@ -288,21 +406,10 @@ class Investigator:
             patient_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             sinan_response (dict): The payload to open the investigation (from the Sinan Researcher class)
         """
-        response = self.session.post(
-            self.open_investigation_endpoint,
-            data=sinan_response["open_payload"],
-        )
-        self.soup = BeautifulSoup(response.content, "html.parser")
-        self._javax_view_state = valid_tag(
-            self.soup.find(attrs={"name": "javax.faces.ViewState"})
-        )
-        if not self._javax_view_state:
-            print("Não foi possível obter o javax.faces.ViewState.")
-            return
+        self.patient_data = patient_data
+        self.__open_investigation_page(sinan_response)
 
-        self._javax_view_state = self._javax_view_state.get("value")
-
-        form_data = self.__get_form_data()
+        self.current_form = self.__get_form_data()
 
         navigation_tag = valid_tag(
             self.soup.find(attrs={"id": "form:tabInvestigacao_lbl"})
@@ -312,10 +419,10 @@ class Investigator:
             return
 
         if "rich-tab-disabled" in (navigation_tag.get("class") or []):
-            # TODO: deve-se marcar como “Não” obrigatoriamente desprezando o que tiver na BASE unificada nos campos 34 e 33
+            self.force_clinal_signs_and_illnesses = True
             print("Aba de investigação tem que ser desbloqueada.")
-            self.__enable_and_open_investigation(form_data)
+            self.__enable_and_open_investigation()
         else:
-            self.__enable_and_open_investigation(form_data)
+            self.__enable_and_open_investigation()
 
-        self.__fill_patient_data(patient_data)
+        self.__fill_patient_data()
