@@ -1,3 +1,4 @@
+import json
 import re
 from typing import Mapping, Optional
 
@@ -242,6 +243,9 @@ class Investigator:
 
     def __select_classification(self):
         """Select the classification based on the exam results (62 - Classificação)"""
+        if self.current_form["form:dengue_classificacao"] in ("11", "12"):
+            return
+
         exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
             "IgM": self.current_form["form:dengue_resultadoExameSorologico"],
             "NS1": self.current_form["form:dengue_resultadoNS1"],
@@ -253,16 +257,18 @@ class Investigator:
             possible_classifications = CLASSSIFICATION_MAP[exam_type]
             possible_exam_results = EXAM_RESULT_ID[exam_type]
             classification_key = next(
-                (k for k, v in possible_exam_results.items() if v == result)
+                (k for k, v in possible_exam_results.items() if v == result),
+                None,
             )
+            if not classification_key:
+                continue
             classification = possible_classifications[classification_key]
             classifications.append(classification)
 
         if any(map(lambda k: k == "10", classifications)):
             self.current_form.update({"form:dengue_classificacao": "10"})
-        else:
+        elif any(map(lambda k: k == "5", classifications)):
             self.current_form.update({"form:dengue_classificacao": "5"})
-
         self.session.post(
             self.notification_endpoint,
             data={**self.current_form, "form:j_id713": "form:j_id713"},
@@ -278,6 +284,11 @@ class Investigator:
 
     def __define_closing_date(self):
         """Insert the value of the closing date (67 - Data de Encerramento)"""
+        if self.current_form["form:dengue_dataEncerramentoInputDate"]:
+            return
+        elif self.current_form["form:dengue_classificacao"] in ("11", "12"):
+            return
+
         self.current_form.update(
             {
                 "form:dengue_dataEncerramentoInputDate": TODAY.strftime(
@@ -305,7 +316,7 @@ class Investigator:
         self.current_form.update(
             {
                 k: (
-                    (self.current_form[v] or "2")
+                    (v or "2")
                     if not self.force_clinal_signs_and_illnesses
                     else "2"
                 )
@@ -319,7 +330,7 @@ class Investigator:
         self.current_form.update(
             {
                 k: (
-                    (self.current_form[v] or "2")
+                    (v or "2")
                     if not self.force_clinal_signs_and_illnesses
                     else "2"
                 )
@@ -333,7 +344,11 @@ class Investigator:
         self.current_form.update(
             {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
         )
-        self.session.post(self.notification_endpoint, data=self.current_form)
+        response = self.session.post(
+            self.notification_endpoint, data=self.current_form
+        )
+        with open("response.html", "wb") as f:
+            f.write(response.content)
 
     def __fill_patient_data(self):
         self.current_form = {
@@ -367,8 +382,8 @@ class Investigator:
         for builder in factory_form_builders:
             builder()
 
-        # TODO: uncomment this and test.
-        # self.__save_investigation()
+        # print(json.dumps(self.current_form, indent=4))
+        self.__save_investigation()
 
     def __get_javafaces_view_state(self):
         """Get the javax.faces.ViewState tag from the current page"""
@@ -418,11 +433,10 @@ class Investigator:
             print("Erro: A tag de navegação não foi encontrada.")
             return
 
-        if "rich-tab-disabled" in (navigation_tag.get("class") or []):
-            self.force_clinal_signs_and_illnesses = True
-            print("Aba de investigação tem que ser desbloqueada.")
-            self.__enable_and_open_investigation()
-        else:
-            self.__enable_and_open_investigation()
+        # verify if the investigation tab is enabled
+        self.force_clinal_signs_and_illnesses = "rich-tab-disabled" in (
+            navigation_tag.get("class") or []
+        )
 
+        self.__enable_and_open_investigation()
         self.__fill_patient_data()
