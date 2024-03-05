@@ -33,9 +33,7 @@ class SinanGalData:
             for i, dataset in enumerate(datasets, 1):
                 print(f"{i:2} - {dataset}")
             try:
-                choice = input(
-                    "Selecione um dos datasets ['Enter' para parar]: "
-                ).strip()
+                choice = input("Selecione um dos datasets ['Enter' para parar]: ").strip()
                 if not choice:
                     break
                 choice = int(choice)
@@ -95,9 +93,7 @@ class SinanGalData:
         self.df_sin.sort_values(by=[DATE_COLUMN], inplace=True)
 
         # Find and mark duplicates based on the specified criteria
-        duplicated_mask = self.df_sin.duplicated(
-            subset=duplicate_criteria, keep=False
-        )
+        duplicated_mask = self.df_sin.duplicated(subset=duplicate_criteria, keep=False)
 
         grouped = self.df_sin[duplicated_mask].groupby(duplicate_criteria)
 
@@ -108,21 +104,14 @@ class SinanGalData:
             considered_patients = [group.iloc[0]]
             for _, patient in group.iloc[1:].iterrows():
                 if (
-                    abs(
-                        considered_patients[-1][DATE_COLUMN]
-                        - patient[DATE_COLUMN]
-                    )
+                    abs(considered_patients[-1][DATE_COLUMN] - patient[DATE_COLUMN])
                     <= MAX_NOTIFICATION_DATE_DIFF
                 ):
                     considered_patients.append(patient)
                 else:
-                    print(
-                        f'Paciente {patient["NM_PACIENT"]} foi removido por duplicidade.'
-                    )
+                    print(f'Paciente {patient["NM_PACIENT"]} foi removido por duplicidade.')
 
-            considered_patients_str = "\t\n".join(
-                str(p["NM_PACIENT"]) for p in considered_patients
-            )
+            considered_patients_str = "\t\n".join(str(p["NM_PACIENT"]) for p in considered_patients)
 
             print(
                 f"Grupo de Duplicados: {group_name} foram considerados:\n{considered_patients_str}"
@@ -132,9 +121,7 @@ class SinanGalData:
         df_considered_duplicates = pd.DataFrame(considered_patients_duplicates)
         df_non_duplicates = self.df_sin[~duplicated_mask]
 
-        self.df_sin = pd.concat(
-            [df_non_duplicates, df_considered_duplicates], ignore_index=True
-        )
+        self.df_sin = pd.concat([df_non_duplicates, df_considered_duplicates], ignore_index=True)
         self.df_sin.reset_index(drop=True, inplace=True)
 
         print(f"Pacientes duplicados removidos. Total: {len(self.df_sin)}")
@@ -183,9 +170,7 @@ class SinanGalData:
         Raise:
             Exception: If the merged dataframe is not defined yet.
         """
-        print(
-            "Filtrando pacientes que irão ser usados para alimentar o SINAN..."
-        )
+        print("Filtrando pacientes que irão ser usados para alimentar o SINAN...")
         if self.df is None:
             raise Exception("Merged dataframe is not defined yet.")
 
@@ -198,24 +183,16 @@ class SinanGalData:
         def filter_content(row: pd.Series) -> bool:
             exam_type = EXAMS_GAL_MAP.get(row["Exame"])
             if not exam_type:
-                print(
-                    f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente."
-                )
+                print(f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente.")
                 return False
 
             rule = rules[exam_type]  # i believe that this will work
-            elapsed_time = abs(
-                (row["Data do 1º Sintomas"] - row["Data da Coleta"])
-            )
+            elapsed_time = abs((row["Data do 1º Sintomas"] - row["Data da Coleta"]))
 
             return rule(elapsed_time)
 
-        self.df = self.df[
-            self.df.apply(filter_content, axis=1, result_type="reduce")
-        ]
-        print(
-            f"Total de pacientes hábeis para irem para o SINAN: {len(self.df)}"
-        )
+        self.df = self.df[self.df.apply(filter_content, axis=1, result_type="reduce")]
+        print(f"Total de pacientes hábeis para irem para o SINAN: {len(self.df)}")
 
     def clean_data(self):
         """
