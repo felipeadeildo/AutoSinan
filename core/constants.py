@@ -1,5 +1,5 @@
 import datetime as dt
-from typing import Literal, Mapping
+from typing import Literal, Mapping, TypedDict
 
 SINAN_BASE_URL = "http://sinan.saude.gov.br"  # protocol http
 """Base url for Sinan Website."""
@@ -82,3 +82,11 @@ EXAM_RESULT_ID: Mapping[POSSIBLE_EXAM_TYPES, Mapping[str, str]] = {
     },
 }
 """Input value map for the exam result in unificated dataset to Sinan Investigation Form"""
+
+
+class NotificationType(TypedDict):
+    """Represents a notification on `investigator.investigate_multiple` method. (Typescript?! LOL!)"""
+
+    open_payload: dict
+    has_investigation: bool
+    notification_date: dt.datetime
