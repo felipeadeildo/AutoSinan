@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import List
 
 import pandas as pd
+import requests
 from bs4 import NavigableString, Tag
 from dbfread import DBF
 
@@ -112,3 +113,19 @@ def get_sinan_credentials():
             json.dump(credentials, f, indent=4)
 
     return credentials
+
+
+def copy_session(session: requests.Session):
+    """Copy requests session to browse over the website in parallel
+
+    Args:
+        session (requests.Session): Session to copy
+
+    Returns:
+        requests.Session: Copy of session
+    """
+    session_copy = requests.Session()
+    session_copy.cookies.update(session.cookies)
+    session_copy.headers.update(session.headers)
+    session_copy.hooks.update(session.hooks)
+    return session_copy
