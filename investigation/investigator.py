@@ -1,6 +1,7 @@
 import json
 import re
-from typing import Mapping, Optional
+from datetime import datetime
+from typing import List, Mapping, Optional
 
 import requests
 from bs4 import BeautifulSoup
@@ -13,6 +14,7 @@ from core.constants import (
     POSSIBLE_EXAM_TYPES,
     SINAN_BASE_URL,
     TODAY,
+    NotificationType,
 )
 from core.utils import valid_tag
 
@@ -22,14 +24,14 @@ class Investigator:
 
     def __init__(self, session: requests.Session) -> None:
         self.session = session
-        self.open_investigation_endpoint = (
+        self.open_notification_endpoint = (
             f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
         )
-        self.notification_endpoint = f"{SINAN_BASE_URL}/sinan/secured/notificacao/individual/dengue/dengueIndividual.jsf"
+        self.notification_endpoint = (
+            f"{SINAN_BASE_URL}/sinan/secured/notificacao/individual/dengue/dengueIndividual.jsf"
+        )
 
-    def __get_form_data(
-        self, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}
-    ) -> dict:
+    def __get_form_data(self, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}) -> dict:
         """Return the default values of the form fields
 
         Args:
@@ -47,10 +49,7 @@ class Investigator:
             exit(1)
 
         # for each input, get the name and value
-        inputs = {
-            i.get("name", ""): i.get("value", "")
-            for i in form.find_all("input")
-        }
+        inputs = {i.get("name", ""): i.get("value", "") for i in form.find_all("input")}
 
         # for each select, get the name and selected option
         selects = {
@@ -84,18 +83,14 @@ class Investigator:
 
         show_modal_text = "".join(show_modal_script.text.split("\n")).strip()
 
-        modal_id_match = re.search(
-            r"getElementById\(['\"]([^'\"]+)['\"]\)", show_modal_text
-        )
+        modal_id_match = re.search(r"getElementById\(['\"]([^'\"]+)['\"]\)", show_modal_text)
         if not modal_id_match:
             print("Error: Modal id not found")
             raise ValueError("Modal id not found")
 
         modal_id = modal_id_match.group(1)
         payload_modal_ok = self.__get_form_data("div", {"id": modal_id})
-        payload_modal_ok = {
-            k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
-        }
+        payload_modal_ok = {k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()}
         self.current_form.pop("form:botaoSalvar", None)
 
         response = self.session.post(
@@ -124,20 +119,14 @@ class Investigator:
         }
         self.current_form.update(
             {
-                "form:richagravo": self.current_form[
-                    "form:richagravocomboboxField"
-                ],
+                "form:richagravo": self.current_form["form:richagravocomboboxField"],
             }
         )
-        response = self.session.post(
-            self.notification_endpoint, data=self.current_form
-        )
+        response = self.session.post(self.notification_endpoint, data=self.current_form)
         self.soup = BeautifulSoup(response.content, "html.parser")
 
         first_investigation_input = valid_tag(
-            self.soup.find(
-                "input", attrs={"id": "form:dtInvestigacaoInputDate"}
-            )
+            self.soup.find("input", attrs={"id": "form:dtInvestigacaoInputDate"})
         )
         # when there is no investigation form, so probabilly exists a modal being shown
         if not first_investigation_input:
@@ -157,20 +146,14 @@ class Investigator:
         """
         exam_type = EXAMS_GAL_MAP[self.patient_data["Exame"]]
         exam_result_map = EXAM_RESULT_ID[exam_type]
-        formatted_collection_date = self.patient_data[
-            "Data da Coleta"
-        ].strftime("%d/%m/%Y")
+        formatted_collection_date = self.patient_data["Data da Coleta"].strftime("%d/%m/%Y")
 
         if exam_type == "PCR":
             patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
-            payload_collection_date_column = (
-                "form:dengue_dataColetaRTPCRInputDate"
-            )
+            payload_collection_date_column = "form:dengue_dataColetaRTPCRInputDate"
             payload_collection_result_column = "form:dengue_resultadoRTPCR"
             exam_result = str(self.patient_data[patient_data_result_column])
-            payload_exam_result = exam_result_map.get(
-                exam_result, exam_result_map["_default"]
-            )
+            payload_exam_result = exam_result_map.get(exam_result, exam_result_map["_default"])
 
             # select the sorotype
             self.current_form.update(
@@ -205,19 +188,13 @@ class Investigator:
 
         elif exam_type == "IgM":
             patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
-            payload_collection_date_column = (
-                "form:dengue_dataColetaExameSorologicoInputDate"
-            )
-            payload_collection_result_column = (
-                "form:dengue_resultadoExameSorologico"
-            )
+            payload_collection_date_column = "form:dengue_dataColetaExameSorologicoInputDate"
+            payload_collection_result_column = "form:dengue_resultadoExameSorologico"
             exam_result = str(self.patient_data[patient_data_result_column])
             payload_exam_result = exam_result_map.get(exam_result)
 
             if not payload_exam_result:
-                raise Exception(
-                    "Não foi possível definir o resultado do exame."
-                )
+                raise Exception("Não foi possível definir o resultado do exame.")
 
             self.current_form.update(
                 {
@@ -228,9 +205,7 @@ class Investigator:
 
         elif exam_type == "NS1":
             patient_data_result_column = EXAM_VALUE_COL_MAP[exam_type]
-            payload_collection_date_column = (
-                "form:dengue_dataColetaNS1InputDate"
-            )
+            payload_collection_date_column = "form:dengue_dataColetaNS1InputDate"
             payload_collection_result_column = "form:dengue_resultadoNS1"
             exam_result = self.patient_data[patient_data_result_column]
             payload_exam_result = exam_result_map[exam_result]
@@ -290,11 +265,7 @@ class Investigator:
             return
 
         self.current_form.update(
-            {
-                "form:dengue_dataEncerramentoInputDate": TODAY.strftime(
-                    "%d/%m/%Y"
-                )
-            }
+            {"form:dengue_dataEncerramentoInputDate": TODAY.strftime("%d/%m/%Y")}
         )
         self.session.post(
             self.notification_endpoint,
@@ -303,9 +274,7 @@ class Investigator:
 
     def __define_investigation_date(self):
         """Define the investigation date (31 - Data da Investigação)"""
-        self.current_form.update(
-            {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
-        )
+        self.current_form.update({"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")})
         self.session.post(
             self.notification_endpoint,
             data={**self.current_form, "form:j_id402": "form:j_id402"},
@@ -315,11 +284,7 @@ class Investigator:
         """Select the clinical signs (33 - Sinais Clinicos)"""
         self.current_form.update(
             {
-                k: (
-                    (v or "2")
-                    if not self.force_clinal_signs_and_illnesses
-                    else "2"
-                )
+                k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
                 for k, v in self.current_form.items()
                 if k.startswith("form:chikungunya_sinais")
             }
@@ -329,11 +294,7 @@ class Investigator:
         """Select the illnesses (34 - Doencas Pré-existentes)"""
         self.current_form.update(
             {
-                k: (
-                    (v or "2")
-                    if not self.force_clinal_signs_and_illnesses
-                    else "2"
-                )
+                k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
                 for k, v in self.current_form.items()
                 if k.startswith("form:chikungunya_doencas")
             }
@@ -341,12 +302,8 @@ class Investigator:
 
     def __save_investigation(self):
         """Save the Investigation filled form date and submit it."""
-        self.current_form.update(
-            {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
-        )
-        response = self.session.post(
-            self.notification_endpoint, data=self.current_form
-        )
+        self.current_form.update({"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"})
+        response = self.session.post(self.notification_endpoint, data=self.current_form)
         with open("response.html", "wb") as f:
             f.write(response.content)
 
@@ -359,9 +316,7 @@ class Investigator:
             "javax.faces.ViewState": self._javax_view_state,
         }
 
-        self.current_form.update(
-            self.__get_form_data(attrs={"id": "form:tabPanelNotificacao"})
-        )
+        self.current_form.update(self.__get_form_data(attrs={"id": "form:tabPanelNotificacao"}))
 
         self.current_form = {
             k: v
@@ -387,9 +342,7 @@ class Investigator:
 
     def __get_javafaces_view_state(self):
         """Get the javax.faces.ViewState tag from the current page"""
-        self._javax_view_state = valid_tag(
-            self.soup.find(attrs={"name": "javax.faces.ViewState"})
-        )
+        self._javax_view_state = valid_tag(self.soup.find(attrs={"name": "javax.faces.ViewState"}))
 
         if not self._javax_view_state:
             print("Não foi possível obter o javax.faces.ViewState.")
@@ -397,46 +350,189 @@ class Investigator:
 
         self._javax_view_state = self._javax_view_state.get("value")
 
-    def __open_investigation_page(self, sinan_response: dict):
-        """Open the investigation page
+    def __open_notification_page(self, open_payload: dict):
+        """Open the patient's notification page (just the notification page, without doing the investigation)
 
         Args:
-            sinan_response (dict): The payload to open the investigation (from the Sinan Researcher class)
+            open_payload (dict): The payload to open the notification
         """
         response = self.session.post(
-            self.open_investigation_endpoint,
-            data=sinan_response["open_payload"],
+            self.open_notification_endpoint,
+            data=open_payload,
         )
         self.soup = BeautifulSoup(response.content, "html.parser")
+
+    def __is_investigation_tab_enabled(self):
+        """Check if the navigation tab is enabled (this must be called when the NOTIFICATION page is open)
+
+        Returns:
+            bool: True if the navigation tab is enabled
+        """
+        investigation_tab = valid_tag(self.soup.find(attrs={"id": "form:tabInvestigacao_lbl"}))
+        if not investigation_tab:
+            print("Erro: A tag de investigação não foi encontrada.")
+            return
+
+        return "rich-tab-disabled" in (investigation_tab.get("class") or [])
+
+    def __open_investigation_page(self, open_payload: dict):
+        """Open the investigation page that will be used to fill the patient exam data
+
+        Args:
+            open_payload (dict): The payload to open the investigation (from the Sinan Researcher class)
+        """
+        self.__open_notification_page(open_payload)
         self.__get_javafaces_view_state()
+
+        self.force_clinal_signs_and_illnesses = self.__is_investigation_tab_enabled()
+        self.__enable_and_open_investigation()
 
     def investigate(
         self,
         patient_data: dict,
-        sinan_response: dict,
+        open_payload: dict,
     ):
         """Investigate an patient filling out the patient data on the Sinan Investigation page
 
         Args:
             patient_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
-            sinan_response (dict): The payload to open the investigation (from the Sinan Researcher class)
+            open_payload (dict): The payload to open the investigation (from the Sinan Researcher class)
         """
         self.patient_data = patient_data
-        self.__open_investigation_page(sinan_response)
+        self.__open_investigation_page(open_payload)
 
         self.current_form = self.__get_form_data()
 
-        navigation_tag = valid_tag(
-            self.soup.find(attrs={"id": "form:tabInvestigacao_lbl"})
-        )
-        if not navigation_tag:
-            print("Erro: A tag de navegação não foi encontrada.")
+        self.__fill_patient_data()
+
+    def __get_notification_date(self):
+        notification_date = valid_tag(self.soup.find(attrs={"id": "form:dtNotificacaoInputDate"}))
+        if not notification_date:
+            print("Erro: A tag de investigação não foi encontrada.")
             return
 
-        # verify if the investigation tab is enabled
-        self.force_clinal_signs_and_illnesses = "rich-tab-disabled" in (
-            navigation_tag.get("class") or []
+        notification_date_str = notification_date.get("value")
+
+        if isinstance(notification_date_str, list):
+            notification_date_str = next(iter(notification_date_str), None)
+
+        if not notification_date_str:
+            print("Erro: Nenhum valor para o atributo de data de notificação encontrado.")
+            return
+
+        try:
+            date = datetime.strptime(notification_date_str, "%d/%m/%Y")
+        except ValueError:
+            print(f"Erro ao converter a data de notificação: {notification_date_str}")
+            return
+        return date
+
+    def __avalie_notifications(
+        self, notifications: list[NotificationType]
+    ) -> tuple[list[NotificationType], list[NotificationType]]:
+        """Compare all notifications (results) and define what will be considered and what will be discarded
+
+        As defined in the Google Doc document:
+        1. No result has investigation: Consider only the oldest notification and descard others
+        2. Every result has investigation: Compare all notifications as defined in the Google Doc document
+        3. Results with investigation and without investigation: Consider only notifications with investigation and descard others
+
+        Args:
+            notifications (list[NotificationType]): List of notifications
+
+        Returns:
+            tuple[list[NotificationType], list[NotificationType]]: List of considered notifications and list of discarded notifications
+                `(considered, discarded)`
+        """
+        considered: list[NotificationType] = []
+        discarded: list[NotificationType] = []
+
+        # 1. No result has investigation: Consider only the oldest notification and descard others
+        if not all(notification["has_investigation"] for notification in notifications):
+            print("Todos os resultados não possuem ficha de investigação.")
+            notification_considered = min(notifications, key=lambda n: n["notification_date"])
+            considered.append(notification_considered)
+            discarded.extend(
+                [
+                    notification
+                    for notification in notifications
+                    if notification != notification_considered
+                ]
+            )
+
+        # 2. Every result has investigation: Compare all notifications exams as defined in the Google Doc document
+        elif all(notification["has_investigation"] for notification in notifications):
+            print("Todos os resultados possuem ficha de investigação.")
+            notifications_data = []
+            for notification in notifications:
+                # TODO: Get the exam classification from the investigation page and save into the "notifications_data" list to compare after
+                ...
+
+            # TODO: the compare process to select the best notification choice and your data.
+            #   this will set the considered and discarded notifications
+
+        # 3. Results with investigation and without investigation: Consider only notifications with investigation and descard others
+        else:
+            print("Resultados com ficha de investigação e resultados sem ficha de investigação.")
+            for notification in notifications:
+                if notification["has_investigation"]:
+                    considered.append(notification)
+                else:
+                    discarded.append(notification)
+
+        return considered, discarded
+
+    def __discard_notification(self, open_payload: dict):
+        """Discard the notification on the Sinan Investigation page
+
+        Args:
+            open_payload (dict): The payload to open the notification
+        """
+        # TODO: Implemente the discard notification, that will open and delete especified notification.
+        ...
+
+    def investigate_multiple(self, patient_data: dict, open_payloads: List[dict]):
+        """Investigate multiple patients filling out the patient data on the Sinan Investigation page
+
+        Args:
+            patients_data (dict: The patient date came from the data loader (SINAN + GAL datasets)
+            open_payloads (dict): The payloads to open the notifications (from the Sinan Researcher class)
+        """
+        notifications: List[NotificationType] = []
+        for open_payload in open_payloads:
+            self.__open_notification_page(open_payload)
+            has_investigation = self.__is_investigation_tab_enabled()
+            if has_investigation is None:
+                return
+
+            notification_date = self.__get_notification_date()
+            if notification_date is None:
+                return
+
+            notifications.append(
+                {
+                    "has_investigation": has_investigation,
+                    "notification_date": notification_date,
+                    "open_payload": open_payload,
+                },
+            )
+
+        notifications_considered = []
+        notifications_discarded = []
+
+        notifications_considered, notifications_discarded = self.__avalie_notifications(
+            notifications
         )
 
-        self.__enable_and_open_investigation()
-        self.__fill_patient_data()
+        for notification_discarded in notifications_discarded:
+            print(f"Notificação descartada: {notification_discarded['notification_date']}")
+            self.__discard_notification(notification_discarded["open_payload"])
+
+        if len(notifications_considered) > 1:
+            self.investigate_multiple(
+                patient_data, [n["open_payload"] for n in notifications_considered]
+            )
+        elif len(notifications_considered) == 1:
+            self.investigate(patient_data, next(iter(notifications_considered))["open_payload"])
+        else:
+            print("Nenhuma notificação encontrada. [Matrix Error]")

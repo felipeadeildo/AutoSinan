@@ -111,14 +111,15 @@ class InvestigationBot(Bot):
         """
         print("Paciente:", patient["NM_PACIENT"])
         sinan_response = self.researcher.search(patient["NM_PACIENT"])
+        open_payloads = [r["open_payload"] for r in sinan_response]
         match len(sinan_response):
             case 0:
                 print("Nenhum resultado encontrado.")
             case 1:
-                sinan_response = next(iter(sinan_response))  # type: ignore
-                self.investigator.investigate(patient.to_dict(), sinan_response)
+                open_payload = next(iter(open_payloads))
+                self.investigator.investigate(patient.to_dict(), open_payload)
             case _:
-                print("Múltiplos resultados encontrados!")
+                self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
 
     def start(self):
         self._login()
