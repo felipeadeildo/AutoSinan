@@ -18,20 +18,14 @@ class NotificationResearcher:
         consultar(self, patient: str): Consult a notification and return the response
     """
 
-    def __init__(
-        self, session: requests.Session, agravo: Literal["A90 - DENGUE"]
-    ):
+    def __init__(self, session: requests.Session, agravo: Literal["A90 - DENGUE"]):
         self.session = session
         self.base_payload = {
             "AJAXREQUEST": "_viewRoot",
             "form": "form",
             "form:consulta_tipoPeriodo": "0",
-            "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime(
-                "%d/%m/%Y"
-            ),
-            "form:consulta_dataInicialInputCurrentDate": TODAY.strftime(
-                "%m/%Y"
-            ),
+            "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime("%d/%m/%Y"),
+            "form:consulta_dataInicialInputCurrentDate": TODAY.strftime("%m/%Y"),
             "form:consulta_dataFinalInputDate": TODAY.strftime("%d/%m/%Y"),
             "form:consulta_dataFinalInputCurrentDate": TODAY.strftime("%m/%Y"),
             "form:richagravocomboboxField": agravo,
@@ -43,9 +37,7 @@ class NotificationResearcher:
             "form:consulta_municipio_uf_id": "0",
             "form:j_id161": "Selecione valor no campo",
         }
-        self.endpoint = (
-            f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
-        )
+        self.endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
 
     def __selecionar_agravo(self):
         """Send the payload to select the agravo"""
@@ -114,6 +106,17 @@ class NotificationResearcher:
         res = self.session.post(self.endpoint, data=payload)
         return res
 
+    def __define_javax_faces(self):
+        """Loads ednpoint page and extract the javax.faces.ViewState this session"""
+        res = self.session.get(self.endpoint)
+        self.soup = BeautifulSoup(res.content, "html.parser")
+        javax_faces = valid_tag(self.soup.find("input", {"name": "javax.faces.ViewState"}))
+        if not javax_faces:
+            print("Java Faces not found.")
+            exit(1)
+
+        self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
+
     def search(self, patient_name: str):
         """Search for a patient in the Sinan website (Consultar Notificação)
 
@@ -125,22 +128,10 @@ class NotificationResearcher:
                 `open_payload` with the payload to open the patient's investigation page
         """
         self.paciente = patient_name
-
-        res = self.session.get(self.endpoint)
-        self.soup = BeautifulSoup(res.content, "html.parser")
-        javax_faces = valid_tag(
-            self.soup.find("input", {"name": "javax.faces.ViewState"})
-        )
-        if not javax_faces:
-            print("Java Faces not found.")
-            exit(1)
-
-        self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
-
+        self.__define_javax_faces()
         self.__selecionar_agravo()
         self.__selecionar_criterio_campo()
-        res = self.__pesquisar()
-        return self.tratar_resultado(res)
+        return self.tratar_resultado(self.__pesquisar())
 
     def tratar_resultado(self, res: requests.Response) -> list[dict]:
         """This will receive the search response from the sinan website and will return a list of dicts with the results
@@ -154,9 +145,7 @@ class NotificationResearcher:
         soup = BeautifulSoup(res.content, "html.parser")
         reult_tag = soup.find("span", {"id": "form:panelResultadoPesquisa"})
         thead = valid_tag(soup.find("thead", {"class": "rich-table-thead"}))
-        tbody = valid_tag(
-            soup.find("tbody", {"id": "form:tabelaResultadoPesquisa:tb"})
-        )
+        tbody = valid_tag(soup.find("tbody", {"id": "form:tabelaResultadoPesquisa:tb"}))
 
         # not all([thead, tbody, reult_tag]):
         if not (thead and tbody and reult_tag):
@@ -165,7 +154,7 @@ class NotificationResearcher:
         column_names = [th.span.text.strip() for th in thead.find_all("th")]
         values = []
 
-        for row in tbody.find_all("tr"):
+        for i, row in enumerate(tbody.find_all("tr"), 0):
             row_values = [td.text.strip() for td in row.find_all("td")]
             value = dict(zip(column_names, row_values))
             payload = self.base_payload.copy()
@@ -173,7 +162,7 @@ class NotificationResearcher:
 
             payload.update(
                 {
-                    "form:tabelaResultadoPesquisa:0:visualizarNotificacao": "form:tabelaResultadoPesquisa:0:visualizarNotificacao"
+                    f"form:tabelaResultadoPesquisa:{i}:visualizarNotificacao": f"form:tabelaResultadoPesquisa:{i}:visualizarNotificacao"
                 }
             )
 
