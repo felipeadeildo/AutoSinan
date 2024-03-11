@@ -1,6 +1,7 @@
 import json
 import re
 from datetime import datetime
+from queue import PriorityQueue
 from typing import List, Mapping, Optional
 
 import requests
@@ -12,6 +13,7 @@ from core.constants import (
     EXAM_VALUE_COL_MAP,
     EXAMS_GAL_MAP,
     POSSIBLE_EXAM_TYPES,
+    PRIORITY_CLASSIFICATION_MAP,
     SINAN_BASE_URL,
     TODAY,
     NotificationType,
@@ -216,17 +218,7 @@ class Investigator:
                 }
             )
 
-    def __select_classification(self):
-        """Select the classification based on the exam results (62 - Classificação)"""
-        if self.current_form["form:dengue_classificacao"] in ("11", "12"):
-            return
-
-        exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
-            "IgM": self.current_form["form:dengue_resultadoExameSorologico"],
-            "NS1": self.current_form["form:dengue_resultadoNS1"],
-            "PCR": self.current_form["form:dengue_resultadoRTPCR"],
-        }
-
+    def __get_classifications(self, exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None]):
         classifications = []
         for exam_type, result in exam_results.items():
             possible_classifications = CLASSSIFICATION_MAP[exam_type]
@@ -239,6 +231,21 @@ class Investigator:
                 continue
             classification = possible_classifications[classification_key]
             classifications.append(classification)
+
+        return classifications
+
+    def __select_classification(self):
+        """Select the classification based on the exam results (62 - Classificação)"""
+        if self.current_form["form:dengue_classificacao"] in ("11", "12"):
+            return
+
+        exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
+            "IgM": self.current_form["form:dengue_resultadoExameSorologico"],
+            "NS1": self.current_form["form:dengue_resultadoNS1"],
+            "PCR": self.current_form["form:dengue_resultadoRTPCR"],
+        }
+
+        classifications = self.__get_classifications(exam_results)
 
         if any(map(lambda k: k == "10", classifications)):
             self.current_form.update({"form:dengue_classificacao": "10"})
@@ -405,7 +412,13 @@ class Investigator:
 
         self.__fill_patient_data()
 
-    def __get_notification_date(self):
+    def __get_notification_date(self) -> Optional[datetime]:
+        """Get the notification date from the notification page
+
+        Returns:
+            datetime: The parsed notification date
+            None: If some error occurs
+        """
         notification_date = valid_tag(self.soup.find(attrs={"id": "form:dtNotificacaoInputDate"}))
         if not notification_date:
             print("Erro: A tag de investigação não foi encontrada.")
@@ -426,6 +439,53 @@ class Investigator:
             print(f"Erro ao converter a data de notificação: {notification_date_str}")
             return
         return date
+
+    def __compare_investigations_data(self, investigations: list[dict[str, dict[str, str]]]):
+        IGM_INPUT_NAME = "form:dengue_resultadoExameSorologico"
+        PCR_INPUT_NAME = "form:dengue_resultadoRTPCR"
+        NS1_INPUT_NAME = "form:dengue_resultadoNS1"
+        CLASSIFICATION_INPUT_NAME = "form:dengue_classificacao"
+        # o código abaixo vai perder um pouco a qualidade pq estou com preguiça, depois eu reescrevo.
+
+        priority_queue = []
+
+        for investigation in investigations:
+            form_data = investigation["form_data"]
+            notification_date = investigation["notification"]["notification_date"]
+            exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
+                "IgM": form_data[IGM_INPUT_NAME],
+                "NS1": form_data[NS1_INPUT_NAME],
+                "PCR": form_data[PCR_INPUT_NAME],
+            }
+            exam_classification = form_data[CLASSIFICATION_INPUT_NAME]
+
+            if exam_classification in ("11", "12"):
+                priority_queue.append(
+                    (
+                        PRIORITY_CLASSIFICATION_MAP[exam_classification],
+                        notification_date,
+                        investigation,
+                    )
+                )
+                continue
+
+            classifications = self.__get_classifications(exam_results)
+            if any(map(lambda k: k == "10", classifications)):
+                priority_queue.append(
+                    (PRIORITY_CLASSIFICATION_MAP["10"], notification_date, investigation)
+                )
+
+            elif any(map(lambda k: k == "5", classifications)):
+                priority_queue.append(
+                    (PRIORITY_CLASSIFICATION_MAP["5"], notification_date, investigation)
+                )
+            else:
+                priority_queue.append((100, notification_date, investigation))
+
+        # sort by priority (x[0]) and the oldest notification date per priority (x[1])
+        priority_queue.sort(key=lambda x: (x[0], x[1]))
+
+        return priority_queue[:1], priority_queue[1:]
 
     def __avalie_notifications(
         self, notifications: list[NotificationType]
@@ -465,11 +525,13 @@ class Investigator:
             print("Todos os resultados possuem ficha de investigação.")
             notifications_data = []
             for notification in notifications:
-                # TODO: Get the exam classification from the investigation page and save into the "notifications_data" list to compare after
-                ...
+                self.__open_investigation_page(notification["open_payload"])
+                investigation_form_data = self.__get_form_data()
+                notifications_data.append(
+                    {"notification": notification, "form_data": investigation_form_data}
+                )
 
-            # TODO: the compare process to select the best notification choice and your data.
-            #   this will set the considered and discarded notifications
+            considered, discarded = self.__compare_investigations_data(notifications_data)
 
         # 3. Results with investigation and without investigation: Consider only notifications with investigation and descard others
         else:
@@ -495,7 +557,7 @@ class Investigator:
         """Investigate multiple patients filling out the patient data on the Sinan Investigation page
 
         Args:
-            patients_data (dict: The patient date came from the data loader (SINAN + GAL datasets)
+            patients_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             open_payloads (dict): The payloads to open the notifications (from the Sinan Researcher class)
         """
         notifications: List[NotificationType] = []
