@@ -3,7 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from core.abstract import Bot
-from core.constants import SINAN_BASE_URL, USER_AGENT
+from core.constants import SINAN_BASE_URL, TODAY, USER_AGENT
 from core.utils import create_logger, valid_tag
 from investigation.data_loader import SinanGalData
 from investigation.investigator import Investigator
@@ -127,6 +127,7 @@ class InvestigationBot(Bot):
         print("Paciente:", patient["NM_PACIENT"])
         sinan_response = self.researcher.search(patient["NM_PACIENT"])
         open_payloads = [r["open_payload"] for r in sinan_response]
+        done_data = []
         match len(sinan_response):
             case 0:
                 self.logger.warning(
@@ -135,12 +136,16 @@ class InvestigationBot(Bot):
                 print("Nenhum resultado encontrado.")
             case 1:
                 open_payload = next(iter(open_payloads))
-                self.investigator.investigate(patient.to_dict(), open_payload)
+                result = self.investigator.investigate(patient.to_dict(), open_payload)
+                done_data.append(result)
             case _:
                 self.logger.warning(
                     f"FILL_FORM: Multiplos resultados encontrados para {patient['NM_PACIENT']}."
                 )
-                self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
+                result = self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
+                done_data.extend(result or [])
+
+        return done_data
 
     def start(self):
         self.logger.info("INICIANDO INVESTIGACAO")
@@ -151,5 +156,10 @@ class InvestigationBot(Bot):
         # patient = df.loc[df["NM_PACIENT"] == "AIN"]
         # self.__fill_form(patient.iloc[0])
 
+        progress_data = []
+        run_datetime = TODAY.strftime("%d-%m-%Y_%H-%M-%S")
         for _, patient in self.data.df.iterrows():
-            self.__fill_form(patient)
+            done_data = self.__fill_form(patient)
+            progress_data.extend(done_data)
+            df = pd.DataFrame(progress_data)
+            df.to_excel(f"Investigações Preenchidas {run_datetime}.xlsx", index=False)

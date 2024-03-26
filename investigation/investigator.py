@@ -81,7 +81,10 @@ class Investigator:
             None,
         )
         if not show_modal_script:
-            print("Script to show modal not found.")
+            self.logger.error("Script pra mostrar o modal na resposta do servidor não encontrado.")
+            with open("investigator.html", "w", encoding="utf-8") as f:
+                f.write(str(self.soup))
+            print("Script pra mostrar o modal na resposta do servidor não encontrado.")
             return
 
         show_modal_text = "".join(show_modal_script.text.split("\n")).strip()
@@ -92,6 +95,8 @@ class Investigator:
             raise ValueError("Modal id not found")
 
         modal_id = modal_id_match.group(1)
+        modal_text = self.soup.find("div", {"id": modal_id}).get_text(strip=True)  # type: ignore [fé]
+        self.done_data.update({"Texto do PopUp de Confirmação (script)": modal_text})
         payload_modal_ok = self.__get_form_data("div", {"id": modal_id})
         payload_modal_ok = {k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()}
         self.current_form.pop("form:botaoSalvar", None)
@@ -353,6 +358,7 @@ class Investigator:
         self._javax_view_state = valid_tag(self.soup.find(attrs={"name": "javax.faces.ViewState"}))
 
         if not self._javax_view_state:
+            self.logger.error("javax.faces.ViewState not found.")
             print("Não foi possível obter o javax.faces.ViewState.")
             return
 
@@ -378,6 +384,7 @@ class Investigator:
         """
         investigation_tab = valid_tag(self.soup.find(attrs={"id": "form:tabInvestigacao_lbl"}))
         if not investigation_tab:
+            self.logger.error("Tag de investigação não encontrada.")
             print("Erro: A tag de investigação não foi encontrada.")
             return
 
@@ -406,12 +413,14 @@ class Investigator:
             patient_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             open_payload (dict): The payload to open the investigation (from the Sinan Researcher class)
         """
+        self.done_data = patient_data.copy()
         self.patient_data = patient_data
         self.__open_investigation_page(open_payload)
 
         self.current_form = self.__get_form_data()
 
         self.__fill_patient_data()
+        return self.done_data
 
     def __get_notification_date(self) -> Optional[datetime]:
         """Get the notification date from the notification page
@@ -554,8 +563,13 @@ class Investigator:
         Args:
             open_payload (dict): The payload to open the notification
         """
-        # TODO: Implemente the discard notification, that will open and delete especified notification.
-        ...
+        self.logger.warning(f"INVESTIGATOR.discard_notification: {open_payload}")
+        self.__open_notification_page(open_payload)
+        form = self.__get_form_data()
+        form.pop("form:botaoSalvar", None)
+        self.__get_javafaces_view_state()
+        form.update({"form:j_id306": "Excluir", "javax.faces.ViewState": self._javax_view_state})
+        self.session.post(self.notification_endpoint, data=form)
 
     def investigate_multiple(self, patient_data: dict, open_payloads: List[dict]):
         """Investigate multiple patients filling out the patient data on the Sinan Investigation page
@@ -566,6 +580,7 @@ class Investigator:
         """
         self.logger.info(f"INVESTIGATOR.investigate_multiple: {patient_data}")
         notifications: List[NotificationType] = []
+        done_data = []
         for i, open_payload in enumerate(open_payloads, 1):
             self.__open_notification_page(open_payload)
             has_investigation = self.__is_investigation_tab_enabled()
@@ -613,11 +628,15 @@ class Investigator:
             self.__discard_notification(notification_discarded["open_payload"])
 
         if len(notifications_considered) > 1:
-            self.investigate_multiple(
+            result = self.investigate_multiple(
                 patient_data, [n["open_payload"] for n in notifications_considered]
             )
+            done_data.extend(result or [])
         elif len(notifications_considered) == 1:
-            self.investigate(patient_data, next(iter(notifications_considered))["open_payload"])
+            result = self.investigate(
+                patient_data, next(iter(notifications_considered))["open_payload"]
+            )
+            done_data.append(result)
         else:
             ic(patient_data)
             ic(notifications)
@@ -627,3 +646,5 @@ class Investigator:
                 f"INVESTIGATOR.investigate_multiple: Matrix: {patient_data} | {notifications}"
             )
             print("Nenhuma notificação encontrada. [Matrix Error]")
+
+        return done_data

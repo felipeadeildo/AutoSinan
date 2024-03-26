@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from core.constants import DATA_FOLDER, EXAMS_GAL_MAP
+from core.constants import DATA_FOLDER, EXAMS_GAL_MAP, TODAY
 from core.utils import clear_screen, load_data, normalize_columns, to_datetime
 
 
@@ -151,6 +151,7 @@ class SinanGalData:
         # Define the maximum notification date difference (1 week)
         max_notification_date_diff = pd.Timedelta(days=7)
         new_rows = []
+        rows_not_found = []
 
         for _, row in self.df_sin.iterrows():
             self.logger.info(
@@ -179,6 +180,8 @@ class SinanGalData:
                     )
 
             new_rows.extend(to_extend)
+            if not to_extend:
+                rows_not_found.append(row)
 
             print(
                 f"Paciente {row['NM_PACIENT']} encontrado com {len(results)} resultados dos quais {len(to_extend)} foram selecionados."
@@ -188,6 +191,10 @@ class SinanGalData:
             )
 
         self.df = pd.DataFrame(new_rows)
+        not_found_df = pd.DataFrame(rows_not_found)
+        not_found_df.to_excel(
+            f"Pacientes Sinan Não Encontrados - {TODAY.strftime('%Y%m%d_%H%M%S')}.xlsx", index=False
+        )
 
     def __exam_filters(self):
         """
