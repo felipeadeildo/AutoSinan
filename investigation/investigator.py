@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime
 from queue import PriorityQueue
@@ -24,7 +25,7 @@ from core.utils import valid_tag
 class Investigator:
     """Given a patient data and your payload to open the Sinan page, this class will be used to investigate the patient."""
 
-    def __init__(self, session: requests.Session) -> None:
+    def __init__(self, session: requests.Session, logger: logging.Logger) -> None:
         self.session = session
         self.open_notification_endpoint = (
             f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
@@ -32,6 +33,7 @@ class Investigator:
         self.notification_endpoint = (
             f"{SINAN_BASE_URL}/sinan/secured/notificacao/individual/dengue/dengueIndividual.jsf"
         )
+        self.logger = logger
 
     def __get_form_data(self, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}) -> dict:
         """Return the default values of the form fields
@@ -578,6 +580,13 @@ class Investigator:
                     "open_payload": open_payload,
                 },
             )
+        
+        notifications.sort(key=lambda n: n["notification_date"])
+        
+        for notification in notifications[1:]:
+            diff_days = (notification["notification_date"] - notifications[0]["notification_date"]).days
+            if diff_days > 15:
+                print(f"Notificação descartada: {notification['notification_date']}")
 
         notifications_considered = []
         notifications_discarded = []

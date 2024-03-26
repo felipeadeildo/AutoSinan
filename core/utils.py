@@ -1,4 +1,5 @@
 import json
+import logging
 import os
 import re
 from pathlib import Path
@@ -9,7 +10,7 @@ import requests
 from bs4 import NavigableString, Tag
 from dbfread import DBF
 
-from core.constants import CREDENTIALS_FILE
+from core.constants import CREDENTIALS_FILE, TODAY
 
 
 def clear_screen():
@@ -129,3 +130,21 @@ def copy_session(session: requests.Session):
     session_copy.headers.update(session.headers)
     session_copy.hooks.update(session.hooks)
     return session_copy
+
+
+def create_logger(name: str):
+    """Create a logger with the given name
+
+    Args:
+        name (str): Logger name
+
+    Returns:
+        logging.Logger: Logger
+    """
+    logger = logging.getLogger(name)
+    fmter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
+    handler = logging.FileHandler(f"{name}_{TODAY.strftime('%Y%m%d_%H%M%S')}.log")
+    handler.setFormatter(fmter)
+    logger.addHandler(handler)
+    logger.setLevel(logging.DEBUG)
+    return logger

@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 
 from core.abstract import Bot
 from core.constants import SINAN_BASE_URL, USER_AGENT
-from core.utils import valid_tag
+from core.utils import create_logger, valid_tag
 from investigation.data_loader import SinanGalData
 from investigation.investigator import Investigator
 from investigation.notification_researcher import NotificationResearcher
@@ -20,40 +20,52 @@ class InvestigationBot(Bot):
     def __init__(self, username: str, password: str) -> None:
         self._username = username
         self._password = password
+        self.logger = create_logger("investigação")
 
         self._init_apps()
 
     def __create_data_manager(self):
         """Load data from SINAN and GAL datasets"""
-        self.data = SinanGalData()
+        self.logger.info("APP_FACTORY: Gerenciador de Dados")
+        self.data = SinanGalData(self.logger)
         self.data.load()
+        self.logger.info("APP_FACTORY: Gerenciador de Dados criado")
         # self.data.df.to_excel("base_unificada.xlsx", index=False)
 
     def __create_session(self):
         """Create a session agent that will be used to make requests"""
+        self.logger.info("APP_FACTORY: Sessão de Requisição")
         self.session = requests.session()
         self.session.headers.update({"User-Agent": USER_AGENT})
+        self.logger.info("APP_FACTORY: Sessão de Requisição criada")
 
     def __create_notification_researcher(self):
         """Create a notification searcher that will be used to research notifications given a patient"""
         # TODO: move the agravo to a settings.toml file
-        self.researcher = NotificationResearcher(self.session, "A90 - DENGUE")
+        self.logger.info("APP_FACTORY: Pesquisador de Notificação")
+        self.researcher = NotificationResearcher(self.session, "A90 - DENGUE", self.logger)
+        self.logger.info("APP_FACTORY: Pesquisador de Notificação criado")
 
     def __create_investigator(self):
         """Create an Investigator that will be used to investigate (fill data)"""
-        self.investigator = Investigator(self.session)
+        self.logger.info("APP_FACTORY: Investigador")
+        self.investigator = Investigator(self.session, self.logger)
+        self.logger.info("APP_FACTORY: Investigador criado")
 
     def _init_apps(self):
         """Factory method to initialize the apps"""
+        self.logger.info("Iniciando aplicativos")
         initializators = [
             self.__create_session,
             self.__create_notification_researcher,
             self.__create_investigator,
-            # self.__create_data_manager,
+            self.__create_data_manager,
         ]
 
         for fn in initializators:
             fn()
+
+        self.logger.info("Aplicativos iniciados")
 
     def __verify_login(self, res: requests.Response):
         """Verify if the login was successful
@@ -63,8 +75,11 @@ class InvestigationBot(Bot):
         """
         soup = BeautifulSoup(res.content, "html.parser")
         if not soup.find("div", {"id": "detalheUsuario"}):
-            print("Login failed.")
+            self.logger.error("LOGIN: Falha na autenticação.")
+            print("Falha no Login")
             exit(1)
+
+        self.logger.info("LOGIN: Autenticação concluída.")
 
         # update the apps that use the session
         need_session = [self.researcher, self.investigator]
@@ -73,8 +88,8 @@ class InvestigationBot(Bot):
 
     def _login(self):
         """Login to the Sinan Website"""
+        self.logger.info("LOGIN: Logando no SINAN")
         print("Logando no SINAN...")
-        self.__create_session()
 
         # set JSESSIONID
         res = self.session.get(f"{SINAN_BASE_URL}/sinan/login/login.jsf")
@@ -122,6 +137,7 @@ class InvestigationBot(Bot):
                 self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
 
     def start(self):
+        self.logger.info("INICIANDO INVESTIGACAO")
         self._login()
 
         # TODO: remove this after, its for testing

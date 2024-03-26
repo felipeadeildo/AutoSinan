@@ -1,3 +1,4 @@
+import logging
 from typing import Literal
 
 import requests
@@ -18,7 +19,7 @@ class NotificationResearcher:
         consultar(self, patient: str): Consult a notification and return the response
     """
 
-    def __init__(self, session: requests.Session, agravo: Literal["A90 - DENGUE"]):
+    def __init__(self, session: requests.Session, agravo: Literal["A90 - DENGUE"], logger: logging.Logger):
         self.session = session
         self.base_payload = {
             "AJAXREQUEST": "_viewRoot",
@@ -38,6 +39,7 @@ class NotificationResearcher:
             "form:j_id161": "Selecione valor no campo",
         }
         self.endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+        self.logger = logger
 
     def __selecionar_agravo(self):
         """Send the payload to select the agravo"""

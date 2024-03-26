@@ -1,3 +1,4 @@
+import logging
 import os
 from pathlib import Path
 
@@ -12,7 +13,8 @@ class SinanGalData:
 
     df: pd.DataFrame
 
-    def __init__(self):
+    def __init__(self, logger: logging.Logger):
+        self.logger = logger
         self.__datafolder = Path(DATA_FOLDER)
         if not self.__datafolder.exists():
             self.__datafolder.mkdir()
