@@ -82,13 +82,16 @@ class SinanGalData:
         """
         Remove duplicate patients from the SINAN dataset based on specified criteria.
         """
+        self.logger.info("REMOVE_DUPLICATES: Removendo duplicados")
         print("Identificando e removendo pacientes duplicados na base SINAN...")
+        self.logger.info("REMOVE_DUPLICATES: Quantidade ANTES: %d", len(self.df_sin))
         print(f"Total de linhas SINAN: {len(self.df_sin)}")
 
         DATE_COLUMN = "DT_SIN_PRI"
 
         # Define the criteria for identifying duplicates
         duplicate_criteria = ["NM_PACIENT", "DT_NASC", "NM_MAE_PAC"]
+        self.logger.info(f"REMOVE_DUPLICATES: Critério de duplicidade: {duplicate_criteria}")
         MAX_NOTIFICATION_DATE_DIFF = pd.Timedelta(days=15)
 
         # Sort the SINAN dataset by notification date
@@ -102,6 +105,7 @@ class SinanGalData:
         # Filter the duplicates based on the maximum notification date difference
         considered_patients_duplicates = []
         for group_name, group_index in grouped.groups.items():
+            self.logger.info(f"REMOVE_DUPLICATES: Analisando grupo de Duplicados: {group_name}")
             group = self.df_sin.loc[group_index]
             considered_patients = [group.iloc[0]]
             for _, patient in group.iloc[1:].iterrows():
@@ -109,14 +113,18 @@ class SinanGalData:
                     abs(considered_patients[-1][DATE_COLUMN] - patient[DATE_COLUMN])
                     <= MAX_NOTIFICATION_DATE_DIFF
                 ):
+                    self.logger.info(
+                        f"REMOVE_DUPLICATES: Paciente considerado duplicado: {patient['NM_PACIENT']}"
+                    )
                     considered_patients.append(patient)
-                else:
-                    print(f'Paciente {patient["NM_PACIENT"]} foi removido por duplicidade.')
 
             considered_patients_str = "\t\n".join(str(p["NM_PACIENT"]) for p in considered_patients)
 
             print(
                 f"Grupo de Duplicados: {group_name} foram considerados:\n{considered_patients_str}"
+            )
+            self.logger.info(
+                f"REMOVE_DUPLICATES: Pacientes considerados duplicados:\n{considered_patients_str}"
             )
             considered_patients_duplicates.extend(considered_patients)
 
@@ -126,12 +134,15 @@ class SinanGalData:
         self.df_sin = pd.concat([df_non_duplicates, df_considered_duplicates], ignore_index=True)
         self.df_sin.reset_index(drop=True, inplace=True)
 
+        self.logger.info("REMOVE_DUPLICATES: Quantidade DEPOIS: %d", len(self.df_sin))
+
         print(f"Pacientes duplicados removidos. Total: {len(self.df_sin)}")
 
     def __join_datasets(self):
         """
         Join datasets based on specified criteria and update the self.df attribute with the combined data.
         """
+        self.logger.info("JOIN_DATASETS: Juntando bases")
         print("Juntando as bases GAL e SINAN...")
 
         DATE_SIN_COLUMN = "DT_SIN_PRI"
@@ -142,25 +153,38 @@ class SinanGalData:
         new_rows = []
 
         for _, row in self.df_sin.iterrows():
+            self.logger.info(
+                f"JOIN_DATASETS: Paciente: Procurando exames de {row['NM_PACIENT']} nascido em {row['DT_NASC']} e mae {row['NM_MAE_PAC']}"
+            )
             results = self.df_gal[
                 (self.df_gal["Paciente"] == row["NM_PACIENT"])
                 & (self.df_gal["Data de Nascimento"] == row["DT_NASC"])
                 & (self.df_gal["Nome da Mãe"] == row["NM_MAE_PAC"])
             ]
             to_extend = []
+            self.logger.info(f"JOIN_DATASETS: Paciente: {len(results)} resultados encontrados.")
             for _, result in results.iterrows():
                 # Check if the notification date is within the maximum notification date difference
-                if (
-                    abs(result[DATE_GAL_COLUMN] - row[DATE_SIN_COLUMN])
-                    <= max_notification_date_diff
-                ):  # abs(x - a) <= b implies that  x is in [a - b, a + b]
+                notification_date_diff = abs(result[DATE_GAL_COLUMN] - row[DATE_SIN_COLUMN])
+                # abs(x - a) <= b implies that  x is in [a - b, a + b]
+                if notification_date_diff <= max_notification_date_diff:
+                    self.logger.info(
+                        f"JOIN_DATASETS: Exame: {row['NM_PACIENT']} encontrado. Adicionando resultado do exame {result['Exame']} na linha {len(to_extend) + 1}"
+                    )
                     new_row = pd.concat([row, result])
                     to_extend.append(new_row)
+                else:
+                    self.logger.info(
+                        f"JOIN_DATASETS: Exame: {row['NM_PACIENT']} ignorado. Diferença de {notification_date_diff} superior a {max_notification_date_diff}"
+                    )
 
             new_rows.extend(to_extend)
 
             print(
                 f"Paciente {row['NM_PACIENT']} encontrado com {len(results)} resultados dos quais {len(to_extend)} foram selecionados."
+            )
+            self.logger.info(
+                f"JOIN_DATASETS: Paciente: {row['NM_PACIENT']} encontrado. {len(results)} resultados encontrados. {len(to_extend)} selecionados."
             )
 
         self.df = pd.DataFrame(new_rows)
@@ -172,6 +196,7 @@ class SinanGalData:
         Raise:
             Exception: If the merged dataframe is not defined yet.
         """
+        self.logger.info("EXAM_FILTERS: Filtrando exames")
         print("Filtrando pacientes que irão ser usados para alimentar o SINAN...")
         if self.df is None:
             raise Exception("Merged dataframe is not defined yet.")
@@ -182,6 +207,8 @@ class SinanGalData:
             "PCR": lambda time: time <= pd.Timedelta(days=5),
         }
 
+        self.logger.info(f"EXAM_FILTERS: Tipos de Exames: {rules.keys()}")
+
         def filter_content(row: pd.Series) -> bool:
             exam_type = EXAMS_GAL_MAP.get(row["Exame"])
             if not exam_type:
@@ -191,7 +218,17 @@ class SinanGalData:
             rule = rules[exam_type]  # i believe that this will work
             elapsed_time = abs((row["Data do 1º Sintomas"] - row["Data da Coleta"]))
 
-            return rule(elapsed_time)
+            result = rule(elapsed_time)
+            if result:
+                self.logger.info(
+                    f"EXAM_FILTERS: SUCESSO: Exame {row['NM_PACIENT']} ({row['Exame']}) tem {elapsed_time.days} dias"
+                )
+            else:
+                self.logger.info(
+                    f"EXAM_FILTERS: FALHA: Exame {row['NM_PACIENT']} ({row['Exame']}) tem {elapsed_time.days} dias"
+                )
+
+            return result
 
         self.df = self.df[self.df.apply(filter_content, axis=1, result_type="reduce")]
         print(f"Total de pacientes hábeis para irem para o SINAN: {len(self.df)}")
@@ -200,6 +237,7 @@ class SinanGalData:
         """
         Method to clean the data. It logs the start of the cleaning process, loads the data, logs the successful data load, and then iterates through a list of cleaning functions to clean the data.
         """
+        self.logger.info("Limpando dados")
         print("Iniciando a limpeza dos dados...")
 
         cleaners = [
@@ -209,6 +247,8 @@ class SinanGalData:
         ]
         for fn in cleaners:
             fn()
+
+        self.logger.info("Dados limpos")
         print("Limpeza concluída.")
 
     def load(self):
@@ -216,19 +256,33 @@ class SinanGalData:
         Load method to load and preprocess GAL and SINAN datasets.
         """
         # GAL
+        self.logger.info("Obtendo o dataset do GAL")
         print("Escolha o dataset do GAL para usar...")
         self.df_gal = self.__get_df()
+        self.logger.info("Dataset do GAL obtido")
 
-        normalize_columns(self.df_gal, ["Paciente", "Nome da Mãe"])
-        to_datetime(
-            self.df_gal,
-            ["Data de Nascimento", "Data do 1º Sintomas", "Data da Coleta"],
-            format="%d-%m-%Y",
-        )
+        to_normalize = ["Paciente", "Nome da Mãe"]
+        self.logger.info(f"Normalizando colunas: {to_normalize}")
+        normalize_columns(self.df_gal, to_normalize)
+        self.logger.info("Colunas normalizadas")
+
+        to_setdatetime = ["Data de Nascimento", "Data do 1º Sintomas", "Data da Coleta"]
+        self.logger.info(f"Convertendo colunas para datetime: {to_setdatetime}")
+        to_datetime(self.df_gal, to_setdatetime, format="%d-%m-%Y")
+        self.logger.info("Colunas convertidas para datetime")
 
         # SINAN
+        self.logger.info("Obtendo o dataset do SINAN")
         print("\n\nEscolha o dataset do SINAN para usar...")
         self.df_sin = self.__get_df()
-        normalize_columns(self.df_sin, ["NM_PACIENT", "NM_MAE_PAC"])
-        to_datetime(self.df_sin, ["DT_NASC", "DT_SIN_PRI"])
+        self.logger.info("Dataset do SINAN obtido")
+
+        to_normalize = ["NM_PACIENT", "NM_MAE_PAC"]
+        self.logger.info(f"Normalizando colunas: {to_normalize}")
+        normalize_columns(self.df_sin, to_normalize)
+
+        to_setdatetime = ["DT_NASC", "DT_SIN_PRI"]
+        self.logger.info(f"Convertendo colunas para datetime: {to_setdatetime}")
+        to_datetime(self.df_sin, to_setdatetime)
+
         self.clean_data()

@@ -19,7 +19,9 @@ class NotificationResearcher:
         consultar(self, patient: str): Consult a notification and return the response
     """
 
-    def __init__(self, session: requests.Session, agravo: Literal["A90 - DENGUE"], logger: logging.Logger):
+    def __init__(
+        self, session: requests.Session, agravo: Literal["A90 - DENGUE"], logger: logging.Logger
+    ):
         self.session = session
         self.base_payload = {
             "AJAXREQUEST": "_viewRoot",
@@ -78,6 +80,7 @@ class NotificationResearcher:
         )
 
         if not tipo_campo:
+            self.logger.error(f"Criterio {CRITERIO} not found.")
             print(f"Criterio {CRITERIO} not found.")
             exit(1)
 
@@ -114,6 +117,7 @@ class NotificationResearcher:
         self.soup = BeautifulSoup(res.content, "html.parser")
         javax_faces = valid_tag(self.soup.find("input", {"name": "javax.faces.ViewState"}))
         if not javax_faces:
+            self.logger.error("Java Faces not found.")
             print("Java Faces not found.")
             exit(1)
 
@@ -129,11 +133,18 @@ class NotificationResearcher:
             List[dict]: A list of dicts with the results and each dict has the key
                 `open_payload` with the payload to open the patient's investigation page
         """
+        self.logger.info("NOTIFICATION_RESEARCHER: Pesquisando por paciente: %s", patient_name)
         self.paciente = patient_name
         self.__define_javax_faces()
         self.__selecionar_agravo()
         self.__selecionar_criterio_campo()
-        return self.tratar_resultado(self.__pesquisar())
+        results = self.tratar_resultado(self.__pesquisar())
+        self.logger.info(
+            "NOTIFICATION_RESEARCHER: Paciente pesquisado (%s) teve %d notificações encontradas no Sinan Online",
+            patient_name,
+            len(results),
+        )
+        return results
 
     def tratar_resultado(self, res: requests.Response) -> list[dict]:
         """This will receive the search response from the sinan website and will return a list of dicts with the results

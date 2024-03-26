@@ -1,12 +1,11 @@
-import json
 import logging
 import re
 from datetime import datetime
-from queue import PriorityQueue
 from typing import List, Mapping, Optional
 
 import requests
 from bs4 import BeautifulSoup
+from icecream import ic
 
 from core.constants import (
     CLASSSIFICATION_MAP,
@@ -423,6 +422,7 @@ class Investigator:
         """
         notification_date = valid_tag(self.soup.find(attrs={"id": "form:dtNotificacaoInputDate"}))
         if not notification_date:
+            self.logger.error("A tag de data de notificação não foi encontrada.")
             print("Erro: A tag de investigação não foi encontrada.")
             return
 
@@ -432,12 +432,14 @@ class Investigator:
             notification_date_str = next(iter(notification_date_str), None)
 
         if not notification_date_str:
+            self.logger.error("Nenhum valor para o atributo de data de notificação encontrado.")
             print("Erro: Nenhum valor para o atributo de data de notificação encontrado.")
             return
 
         try:
             date = datetime.strptime(notification_date_str, "%d/%m/%Y")
         except ValueError:
+            self.logger.error(f"Erro ao converter a data de notificação: {notification_date_str}")
             print(f"Erro ao converter a data de notificação: {notification_date_str}")
             return
         return date
@@ -562,11 +564,15 @@ class Investigator:
             patients_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             open_payloads (dict): The payloads to open the notifications (from the Sinan Researcher class)
         """
+        self.logger.info(f"INVESTIGATOR.investigate_multiple: {patient_data}")
         notifications: List[NotificationType] = []
-        for open_payload in open_payloads:
+        for i, open_payload in enumerate(open_payloads, 1):
             self.__open_notification_page(open_payload)
             has_investigation = self.__is_investigation_tab_enabled()
             if has_investigation is None:
+                self.logger.warning(
+                    f"INVESTIGATOR.investigate_multiple: {patient_data} | {i} | {open_payload} | {has_investigation}"
+                )
                 return
 
             notification_date = self.__get_notification_date()
@@ -580,12 +586,19 @@ class Investigator:
                     "open_payload": open_payload,
                 },
             )
-        
+
         notifications.sort(key=lambda n: n["notification_date"])
-        
+
         for notification in notifications[1:]:
-            diff_days = (notification["notification_date"] - notifications[0]["notification_date"]).days
-            if diff_days > 15:
+            diff_days = (
+                notification["notification_date"] - notifications[0]["notification_date"]
+            ).days
+            if diff_days < 15:
+                ic(notification)
+                self.logger.info(
+                    f"INVESTIGATOR.investigate_multiple: {patient_data} | {diff_days} | {notification['notification_date']}\n\n"
+                    "Descartada por ter menos de 15 dias de diferença"
+                )
                 print(f"Notificação descartada: {notification['notification_date']}")
 
         notifications_considered = []
@@ -606,4 +619,11 @@ class Investigator:
         elif len(notifications_considered) == 1:
             self.investigate(patient_data, next(iter(notifications_considered))["open_payload"])
         else:
+            ic(patient_data)
+            ic(notifications)
+            ic(notifications_considered)
+            ic(notifications_discarded)
+            self.logger.error(
+                f"INVESTIGATOR.investigate_multiple: Matrix: {patient_data} | {notifications}"
+            )
             print("Nenhuma notificação encontrada. [Matrix Error]")

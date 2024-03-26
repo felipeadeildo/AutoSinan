@@ -129,11 +129,17 @@ class InvestigationBot(Bot):
         open_payloads = [r["open_payload"] for r in sinan_response]
         match len(sinan_response):
             case 0:
+                self.logger.warning(
+                    f"FILL_FORM: Nenhum resultado encontrado para {patient['NM_PACIENT']}."
+                )
                 print("Nenhum resultado encontrado.")
             case 1:
                 open_payload = next(iter(open_payloads))
                 self.investigator.investigate(patient.to_dict(), open_payload)
             case _:
+                self.logger.warning(
+                    f"FILL_FORM: Multiplos resultados encontrados para {patient['NM_PACIENT']}."
+                )
                 self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
 
     def start(self):

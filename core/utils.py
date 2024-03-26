@@ -9,6 +9,7 @@ import pandas as pd
 import requests
 from bs4 import NavigableString, Tag
 from dbfread import DBF
+from icecream import ic
 
 from core.constants import CREDENTIALS_FILE, TODAY
 
@@ -147,4 +148,5 @@ def create_logger(name: str):
     handler.setFormatter(fmter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
+    ic.configureOutput(outputFunction=lambda msg: logger.info(msg), includeContext=True)
     return logger
