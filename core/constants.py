@@ -1,4 +1,5 @@
 import datetime as dt
+from pathlib import Path
 from typing import Literal, Mapping, TypedDict
 
 SINAN_BASE_URL = "http://sinan.saude.gov.br"  # protocol http
@@ -39,7 +40,7 @@ EXAMS_GAL_MAP: dict[str, POSSIBLE_EXAM_TYPES] = {
 EXAM_VALUE_COL_MAP: dict[POSSIBLE_EXAM_TYPES, str] = {
     "IgM": "Resultado",
     "NS1": "Resultado",
-    "PCR": "Dengue",
+    "PCR": "Status Exame",
 }
 """Represents the column name of the exam value in the unificated dataset."""
 
@@ -99,3 +100,9 @@ PRIORITY_CLASSIFICATION_MAP: Mapping[str, int] = {
     "12": 0,
 }
 """Priority classification map to the exam classification (5, 10, 11, 12)"""
+
+SCRIPT_GENERATED_PATH = Path("script")
+"""The path to save log files and other files."""
+
+
+SCRIPT_GENERATED_PATH.mkdir(exist_ok=True)
