@@ -3,7 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from core.abstract import Bot
-from core.constants import SINAN_BASE_URL, TODAY, USER_AGENT
+from core.constants import SCRIPT_GENERATED_PATH, SINAN_BASE_URL, TODAY, USER_AGENT
 from core.utils import create_logger, valid_tag
 from investigation.data_loader import SinanGalData
 from investigation.investigator import Investigator
@@ -162,4 +162,7 @@ class InvestigationBot(Bot):
             done_data = self.__fill_form(patient)
             progress_data.extend(done_data)
             df = pd.DataFrame(progress_data)
-            df.to_excel(f"Investigações Preenchidas {run_datetime}.xlsx", index=False)
+            df.to_excel(
+                SCRIPT_GENERATED_PATH / f"Investigações Preenchidas {run_datetime}.xlsx",
+                index=False,
+            )
