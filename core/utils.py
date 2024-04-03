@@ -11,7 +11,7 @@ from bs4 import NavigableString, Tag
 from dbfread import DBF
 from icecream import ic
 
-from core.constants import CREDENTIALS_FILE, TODAY
+from .constants import CREDENTIALS_FILE, SCRIPT_GENERATED_PATH, TODAY
 
 
 def clear_screen():
@@ -144,7 +144,9 @@ def create_logger(name: str):
     """
     logger = logging.getLogger(name)
     fmter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
-    handler = logging.FileHandler(f"{name}_{TODAY.strftime('%Y%m%d_%H%M%S')}.log")
+    handler = logging.FileHandler(
+        SCRIPT_GENERATED_PATH / f"{name}_{TODAY.strftime('%Y%m%d_%H%M%S')}.log"
+    )
     handler.setFormatter(fmter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)

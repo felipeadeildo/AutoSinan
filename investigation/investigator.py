@@ -5,7 +5,6 @@ from typing import List, Mapping, Optional
 
 import requests
 from bs4 import BeautifulSoup
-from icecream import ic
 
 from core.constants import (
     CLASSSIFICATION_MAP,
@@ -114,6 +113,7 @@ class Investigator:
         Args:
             form_data (dict): The patient form data to open investigation
         """
+        self.current_form = self.__get_form_data()
         self.current_form = {
             k: v
             for k, v in self.current_form.items()
@@ -230,7 +230,11 @@ class Investigator:
             possible_classifications = CLASSSIFICATION_MAP[exam_type]
             possible_exam_results = EXAM_RESULT_ID[exam_type]
             classification_key = next(
-                (k for k, v in possible_exam_results.items() if v == result),
+                (
+                    classification_name
+                    for classification_name, classification_value in possible_exam_results.items()
+                    if classification_value == result
+                ),
                 None,
             )
             if not classification_key:
@@ -609,7 +613,6 @@ class Investigator:
                 notification["notification_date"] - notifications[0]["notification_date"]
             ).days
             if diff_days < 15:
-                ic(notification)
                 self.logger.info(
                     f"INVESTIGATOR.investigate_multiple: {patient_data} | {diff_days} | {notification['notification_date']}\n\n"
                     "Descartada por ter menos de 15 dias de diferença"
@@ -638,10 +641,6 @@ class Investigator:
             )
             done_data.append(result)
         else:
-            ic(patient_data)
-            ic(notifications)
-            ic(notifications_considered)
-            ic(notifications_discarded)
             self.logger.error(
                 f"INVESTIGATOR.investigate_multiple: Matrix: {patient_data} | {notifications}"
             )
