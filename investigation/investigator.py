@@ -5,6 +5,7 @@ from typing import List, Mapping, Optional
 
 import requests
 from bs4 import BeautifulSoup
+from icecream import ic
 
 from core.constants import (
     CLASSSIFICATION_MAP,
@@ -70,7 +71,6 @@ class Investigator:
 
     def __submit_modal_ok(self):
         """Click in "Ok" buttom if modal appears in the response"""
-
         show_modal_script = next(
             (
                 s
@@ -81,8 +81,6 @@ class Investigator:
         )
         if not show_modal_script:
             self.logger.error("Script pra mostrar o modal na resposta do servidor não encontrado.")
-            with open("investigator.html", "w", encoding="utf-8") as f:
-                f.write(str(self.soup))
             print("Script pra mostrar o modal na resposta do servidor não encontrado.")
             return
 
@@ -104,8 +102,21 @@ class Investigator:
             self.notification_endpoint,
             data={**self.current_form, **payload_modal_ok},
         )
-
         self.soup = BeautifulSoup(response.content, "html.parser")
+
+        return self.__finish_open_investigation()
+
+    def __finish_open_investigation(self):
+        first_investigation_input = valid_tag(
+            self.soup.find("input", attrs={"id": "form:dtInvestigacaoInputDate"})
+        )
+        # when there is no investigation form, so probabilly exists a modal being shown
+        if not first_investigation_input:
+            try:
+                self.__submit_modal_ok()
+            except ValueError:
+                # TODO: handle modal not found
+                pass
 
     def __enable_and_open_investigation(self):
         """Enable the investigation aba and open it (the response form)
@@ -133,16 +144,7 @@ class Investigator:
         response = self.session.post(self.notification_endpoint, data=self.current_form)
         self.soup = BeautifulSoup(response.content, "html.parser")
 
-        first_investigation_input = valid_tag(
-            self.soup.find("input", attrs={"id": "form:dtInvestigacaoInputDate"})
-        )
-        # when there is no investigation form, so probabilly exists a modal being shown
-        if not first_investigation_input:
-            try:
-                self.__submit_modal_ok()
-            except ValueError:
-                # TODO: handle modal not found
-                pass
+        self.__finish_open_investigation()
 
     def __define_exam_result_data(self):
         """Get the payload with the exam result which is one of the options in the Sinan Investigation Form and fill the exam result.

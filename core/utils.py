@@ -150,5 +150,5 @@ def create_logger(name: str):
     handler.setFormatter(fmter)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
-    ic.configureOutput(outputFunction=lambda msg: logger.info(msg), includeContext=True)
+    ic.configureOutput(includeContext=True)
     return logger
