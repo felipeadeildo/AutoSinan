@@ -126,14 +126,14 @@ class InvestigationBot(Bot):
         Args:
             patient (dict): The patient data
         """
-        print("Paciente:", patient["NM_PACIENT"])
-        sinan_response = self.researcher.search(patient["NM_PACIENT"])
+        print("Paciente:", patient["Paciente"])
+        sinan_response = self.researcher.search(patient["Paciente"])
         open_payloads = [r["open_payload"] for r in sinan_response]
         done_data = []
         match len(sinan_response):
             case 0:
                 self.logger.warning(
-                    f"FILL_FORM: Nenhum resultado encontrado para {patient['NM_PACIENT']}."
+                    f"FILL_FORM: Nenhum resultado encontrado para {patient['Paciente']}."
                 )
                 print("Nenhum resultado encontrado.")
             case 1:
@@ -142,7 +142,7 @@ class InvestigationBot(Bot):
                 done_data.append(result)
             case _:
                 self.logger.warning(
-                    f"FILL_FORM: Multiplos resultados encontrados para {patient['NM_PACIENT']}."
+                    f"FILL_FORM: Multiplos resultados encontrados para {patient['Paciente']}."
                 )
                 # TODO: Investigate Mulltiple is too dangenerous, so, it only will be used when the function be safe.
                 return []
