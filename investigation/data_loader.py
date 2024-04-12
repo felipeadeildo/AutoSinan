@@ -35,7 +35,9 @@ class SinanGalData:
             for i, dataset in enumerate(datasets, 1):
                 print(f"{i:2} - {dataset}")
             try:
-                choice = input("Selecione um dos datasets ['Enter' para parar]: ").strip()
+                choice = input(
+                    "Selecione um dos datasets ['Enter' para parar]: "
+                ).strip()
                 if not choice:
                     break
                 choice = int(choice)
@@ -91,7 +93,9 @@ class SinanGalData:
 
         # Define the criteria for identifying duplicates
         duplicate_criteria = ["NM_PACIENT", "DT_NASC", "NM_MAE_PAC"]
-        self.logger.info(f"REMOVE_DUPLICATES: Critério de duplicidade: {duplicate_criteria}")
+        self.logger.info(
+            f"REMOVE_DUPLICATES: Critério de duplicidade: {duplicate_criteria}"
+        )
         MAX_NOTIFICATION_DATE_DIFF = pd.Timedelta(days=15)
 
         # Sort the SINAN dataset by notification date
@@ -105,7 +109,9 @@ class SinanGalData:
         # Filter the duplicates based on the maximum notification date difference
         considered_patients_duplicates = []
         for group_name, group_index in grouped.groups.items():
-            self.logger.info(f"REMOVE_DUPLICATES: Analisando grupo de Duplicados: {group_name}")
+            self.logger.info(
+                f"REMOVE_DUPLICATES: Analisando grupo de Duplicados: {group_name}"
+            )
             group = self.df_sin.loc[group_index]
             considered_patients = [group.iloc[0]]
             for _, patient in group.iloc[1:].iterrows():
@@ -118,7 +124,9 @@ class SinanGalData:
                     )
                     considered_patients.append(patient)
 
-            considered_patients_str = "\t\n".join(str(p["NM_PACIENT"]) for p in considered_patients)
+            considered_patients_str = "\t\n".join(
+                str(p["NM_PACIENT"]) for p in considered_patients
+            )
 
             print(
                 f"Grupo de Duplicados: {group_name} foram considerados:\n{considered_patients_str}"
@@ -131,7 +139,9 @@ class SinanGalData:
         df_considered_duplicates = pd.DataFrame(considered_patients_duplicates)
         df_non_duplicates = self.df_sin[~duplicated_mask]
 
-        self.df_sin = pd.concat([df_non_duplicates, df_considered_duplicates], ignore_index=True)
+        self.df_sin = pd.concat(
+            [df_non_duplicates, df_considered_duplicates], ignore_index=True
+        )
         self.df_sin.reset_index(drop=True, inplace=True)
 
         self.logger.info("REMOVE_DUPLICATES: Quantidade DEPOIS: %d", len(self.df_sin))
@@ -163,10 +173,14 @@ class SinanGalData:
                 & (self.df_gal["Nome da Mãe"] == row["NM_MAE_PAC"])
             ]
             to_extend = []
-            self.logger.info(f"JOIN_DATASETS: Paciente: {len(results)} resultados encontrados.")
+            self.logger.info(
+                f"JOIN_DATASETS: Paciente: {len(results)} resultados encontrados."
+            )
             for _, result in results.iterrows():
                 # Check if the notification date is within the maximum notification date difference
-                notification_date_diff = abs(result[DATE_GAL_COLUMN] - row[DATE_SIN_COLUMN])
+                notification_date_diff = abs(
+                    result[DATE_GAL_COLUMN] - row[DATE_SIN_COLUMN]
+                )
                 # abs(x - a) <= b implies that  x is in [a - b, a + b]
                 if notification_date_diff <= max_notification_date_diff:
                     self.logger.info(
@@ -193,7 +207,8 @@ class SinanGalData:
         self.df = pd.DataFrame(new_rows)
         not_found_df = pd.DataFrame(rows_not_found)
         not_found_df.to_excel(
-            f"Pacientes Sinan Não Encontrados - {TODAY.strftime('%Y%m%d_%H%M%S')}.xlsx", index=False
+            f"Pacientes Sinan Não Encontrados - {TODAY.strftime('%Y%m%d_%H%M%S')}.xlsx",
+            index=False,
         )
 
     def __exam_filters(self):
@@ -219,7 +234,9 @@ class SinanGalData:
         def filter_content(row: pd.Series) -> bool:
             exam_type = EXAMS_GAL_MAP.get(row["Exame"])
             if not exam_type:
-                print(f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente.")
+                print(
+                    f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente."
+                )
                 return False
 
             rule = rules[exam_type]  # i believe that this will work

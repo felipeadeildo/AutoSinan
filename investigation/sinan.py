@@ -43,7 +43,9 @@ class InvestigationBot(Bot):
         """Create a notification searcher that will be used to research notifications given a patient"""
         # TODO: move the agravo to a settings.toml file
         self.logger.info("APP_FACTORY: Pesquisador de Notificação")
-        self.researcher = NotificationResearcher(self.session, "A90 - DENGUE", self.logger)
+        self.researcher = NotificationResearcher(
+            self.session, "A90 - DENGUE", self.logger
+        )
         self.logger.info("APP_FACTORY: Pesquisador de Notificação criado")
 
     def __create_investigator(self):
@@ -142,7 +144,11 @@ class InvestigationBot(Bot):
                 self.logger.warning(
                     f"FILL_FORM: Multiplos resultados encontrados para {patient['NM_PACIENT']}."
                 )
-                result = self.investigator.investigate_multiple(patient.to_dict(), open_payloads)
+                # TODO: Investigate Mulltiple is too dangenerous, so, it only will be used when the function be safe.
+                return []
+                result = self.investigator.investigate_multiple(
+                    patient.to_dict(), open_payloads
+                )
                 done_data.extend(result or [])
 
         return done_data
@@ -150,12 +156,6 @@ class InvestigationBot(Bot):
     def start(self):
         self.logger.info("INICIANDO INVESTIGACAO")
         self._login()
-
-        # TODO: remove this after, its for testing
-        # df = pd.read_excel("base_unificada.xlsx")
-        # patient = df.loc[df["NM_PACIENT"] == "AIN"]
-        # self.__fill_form(patient.iloc[0])
-
         progress_data = []
         run_datetime = TODAY.strftime("%d-%m-%Y_%H-%M-%S")
         for _, patient in self.data.df.iterrows():
@@ -163,6 +163,7 @@ class InvestigationBot(Bot):
             progress_data.extend(done_data)
             df = pd.DataFrame(progress_data)
             df.to_excel(
-                SCRIPT_GENERATED_PATH / f"Investigações Preenchidas {run_datetime}.xlsx",
+                SCRIPT_GENERATED_PATH
+                / f"Investigações Preenchidas {run_datetime}.xlsx",
                 index=False,
             )

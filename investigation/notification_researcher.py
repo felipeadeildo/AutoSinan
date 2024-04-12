@@ -20,14 +20,19 @@ class NotificationResearcher:
     """
 
     def __init__(
-        self, session: requests.Session, agravo: Literal["A90 - DENGUE"], logger: logging.Logger
+        self,
+        session: requests.Session,
+        agravo: Literal["A90 - DENGUE"],
+        logger: logging.Logger,
     ):
         self.session = session
         self.base_payload = {
             "AJAXREQUEST": "_viewRoot",
             "form": "form",
             "form:consulta_tipoPeriodo": "0",
-            "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime("%d/%m/%Y"),
+            "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime(
+                "%d/%m/%Y"
+            ),
             "form:consulta_dataInicialInputCurrentDate": TODAY.strftime("%m/%Y"),
             "form:consulta_dataFinalInputDate": TODAY.strftime("%d/%m/%Y"),
             "form:consulta_dataFinalInputCurrentDate": TODAY.strftime("%m/%Y"),
@@ -40,7 +45,9 @@ class NotificationResearcher:
             "form:consulta_municipio_uf_id": "0",
             "form:j_id161": "Selecione valor no campo",
         }
-        self.endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+        self.endpoint = (
+            f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+        )
         self.logger = logger
 
     def __selecionar_agravo(self):
@@ -73,7 +80,9 @@ class NotificationResearcher:
         """Send the payload to select the filter criterion field (`Nome do paciente`)"""
         CRITERIO = "Nome do paciente"
 
-        options = self.soup.find("select", {"id": "form:consulta_tipoCampo"}).find_all("option")  # type: ignore
+        options = self.soup.find("select", {"id": "form:consulta_tipoCampo"}).find_all(  # type: ignore
+            "option"
+        )
         tipo_campo = next(
             (option for option in options if option.text.strip() == CRITERIO),
             None,
@@ -115,7 +124,9 @@ class NotificationResearcher:
         """Loads ednpoint page and extract the javax.faces.ViewState this session"""
         res = self.session.get(self.endpoint)
         self.soup = BeautifulSoup(res.content, "html.parser")
-        javax_faces = valid_tag(self.soup.find("input", {"name": "javax.faces.ViewState"}))
+        javax_faces = valid_tag(
+            self.soup.find("input", {"name": "javax.faces.ViewState"})
+        )
         if not javax_faces:
             self.logger.error("Java Faces not found.")
             print("Java Faces not found.")
@@ -133,7 +144,9 @@ class NotificationResearcher:
             List[dict]: A list of dicts with the results and each dict has the key
                 `open_payload` with the payload to open the patient's investigation page
         """
-        self.logger.info("NOTIFICATION_RESEARCHER: Pesquisando por paciente: %s", patient_name)
+        self.logger.info(
+            "NOTIFICATION_RESEARCHER: Pesquisando por paciente: %s", patient_name
+        )
         self.paciente = patient_name
         self.__define_javax_faces()
         self.__selecionar_agravo()

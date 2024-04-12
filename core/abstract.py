@@ -17,4 +17,4 @@ class Bot(ABC):
     @abstractmethod
     def start(self):
         """Starts the bot execution with your own logic"""
-        raise NotImplemented("start() not implemented")
+        raise NotImplementedError("start() not implemented")
