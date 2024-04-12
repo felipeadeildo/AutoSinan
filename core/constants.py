@@ -101,6 +101,14 @@ PRIORITY_CLASSIFICATION_MAP: Mapping[str, int] = {
 }
 """Priority classification map to the exam classification (5, 10, 11, 12)"""
 
+CLASSIFICATION_FRIENDLY_MAP: Mapping[str, str] = {
+    "5": "5 - Descartado",
+    "10": "10 - Dengue",
+    "11": "11 - Dengue com sinais de alarme",
+    "12": "12 - Dengue grave",
+}
+"""A friendly map to the exam classification (5, 10, 11, 12)"""
+
 SCRIPT_GENERATED_PATH = Path("script")
 """The path to save log files and other files."""
 

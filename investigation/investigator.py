@@ -7,6 +7,7 @@ import requests
 from bs4 import BeautifulSoup
 
 from core.constants import (
+    CLASSIFICATION_FRIENDLY_MAP,
     CLASSSIFICATION_MAP,
     EXAM_RESULT_ID,
     EXAM_VALUE_COL_MAP,
@@ -105,6 +106,7 @@ class Investigator:
 
         modal_id = modal_id_match.group(1)
         modal_text = self.soup.find("div", {"id": modal_id}).get_text(strip=True)  # type: ignore [fé]
+        print(f"Texto apresentado no popUp: {modal_text}")
         self.done_data.update({"Texto do PopUp de Confirmação (script)": modal_text})
         payload_modal_ok = self.__get_form_data("div", {"id": modal_id})
         payload_modal_ok = {
@@ -112,12 +114,14 @@ class Investigator:
         }
         self.current_form.pop("form:botaoSalvar", None)
 
+        print("Clicando em 'ok' para continuar...")
         response = self.session.post(
             self.notification_endpoint,
             data={**self.current_form, **payload_modal_ok},
         )
         self.soup = BeautifulSoup(response.content, "html.parser")
 
+        print("Tudo ok, continuando...")
         return self.__finish_open_investigation()
 
     def __finish_open_investigation(self):
@@ -127,6 +131,9 @@ class Investigator:
         # when there is no investigation form, so probabilly exists a modal being shown
         if not first_investigation_input:
             try:
+                print(
+                    "Ao tentar abrir aba de investigação apareceu um 'popUp'... Clicando em 'ok'..."
+                )
                 self.__submit_modal_ok()
             except ValueError:
                 # TODO: handle modal not found
@@ -138,6 +145,7 @@ class Investigator:
         Args:
             form_data (dict): The patient form data to open investigation
         """
+        print("Abrindo aba de investigação...")
         self.current_form = self.__get_form_data()
         self.current_form = {
             k: v
@@ -171,11 +179,10 @@ class Investigator:
             }
         )
         response = self.session.post(self.notification_endpoint, data=self.current_form)
-        with open("enable_and_open_investigation.html", "wb") as f:
-            f.write(response.content)
         self.soup = BeautifulSoup(response.content, "html.parser")
 
         self.__finish_open_investigation()
+        print("Aba de investigação aberta para preenchimento.")
 
     def __define_exam_result_data(self):
         """Get the payload with the exam result which is one of the options in the Sinan Investigation Form and fill the exam result.
@@ -186,6 +193,9 @@ class Investigator:
             47 - Sorotipo
         """
         exam_type = EXAMS_GAL_MAP[self.patient_data["Exame"]]
+        print(
+            f"[Preenchimento] Definindo resultado do exame para exame do tipo {exam_type}"
+        )
         exam_result_map = EXAM_RESULT_ID[exam_type]
         formatted_collection_date = self.patient_data["Data da Coleta"].strftime(
             "%d/%m/%Y"
@@ -262,6 +272,12 @@ class Investigator:
                     payload_collection_result_column: payload_exam_result,
                 }
             )
+        else:
+            raise Exception("Exame inválido")
+
+        print(
+            f"[Preenchimento] Resultado do exame: {payload_exam_result} ({exam_result}) | Data de Coleta: {formatted_collection_date}"
+        )
 
     def __get_classifications(
         self, exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None]
@@ -287,7 +303,12 @@ class Investigator:
 
     def __select_classification(self):
         """Select the classification based on the exam results (62 - Classificação)"""
+        print("[Preenchimento] Selecionando a classificação do exame")
         if self.current_form["form:dengue_classificacao"] in ("11", "12"):
+            classification = self.current_form["form:dengue_classificacao"]
+            print(
+                f"[Preenchimento] Classificação já selecionada com '{CLASSIFICATION_FRIENDLY_MAP[classification]}'. Ignorado."
+            )
             return
 
         exam_results: Mapping[POSSIBLE_EXAM_TYPES, str | None] = {
@@ -299,8 +320,14 @@ class Investigator:
         classifications = self.__get_classifications(exam_results)
 
         if any(map(lambda k: k == "10", classifications)):
+            print(
+                f"[Preenchimento] Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP["10"]}"
+            )
             self.current_form.update({"form:dengue_classificacao": "10"})
         elif any(map(lambda k: k == "5", classifications)):
+            print(
+                f"[Preenchimento] Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP["5"]}"
+            )
             self.current_form.update({"form:dengue_classificacao": "5"})
         self.session.post(
             self.notification_endpoint,
@@ -309,6 +336,7 @@ class Investigator:
 
     def __select_criteria(self):
         """Select the confirmation criteria (63 - Critério de Confirmação)"""
+        print("[Preenchimento] Selecionando o critério de confirmação")
         self.current_form.update({"form:dengue_criterio": "1"})
         self.session.post(
             self.notification_endpoint,
@@ -317,9 +345,14 @@ class Investigator:
 
     def __define_closing_date(self):
         """Insert the value of the closing date (67 - Data de Encerramento)"""
-        if self.current_form["form:dengue_dataEncerramentoInputDate"]:
+        print("[Preenchimento] Definindo 67 - Data de Encerramento...", end=" ")
+        if value := self.current_form["form:dengue_dataEncerramentoInputDate"]:
+            print(f"Já existe data definida ({value}). Ignorado.")
             return
         elif self.current_form["form:dengue_classificacao"] in ("11", "12"):
+            print(
+                f"Classificação selecionada como '{CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}'. Ignorado."
+            )
             return
 
         self.current_form.update(
@@ -329,9 +362,11 @@ class Investigator:
             self.notification_endpoint,
             data={**self.current_form, "form:j_id739": "form:j_id739"},
         )
+        print("Feito!")
 
     def __define_investigation_date(self):
         """Define the investigation date (31 - Data da Investigação)"""
+        print("[Preenchimento] Definindo data de investigação para o dia de hoje.")
         self.current_form.update(
             {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
         )
@@ -342,6 +377,7 @@ class Investigator:
 
     def __select_clinical_signs(self):
         """Select the clinical signs (33 - Sinais Clinicos)"""
+        print("[Preenchimento] Selecionando 33 - Sinais Clinicos")
         self.current_form.update(
             {
                 k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
@@ -352,6 +388,7 @@ class Investigator:
 
     def __select_illnesses(self):
         """Select the illnesses (34 - Doencas Pré-existentes)"""
+        print("[Preenchimento] Selecionando 34 - Doencas Pré-existentes")
         self.current_form.update(
             {
                 k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
@@ -362,14 +399,16 @@ class Investigator:
 
     def __save_investigation(self):
         """Save the Investigation filled form date and submit it."""
+        print("Salvando investigação preenchida...", end=" ")
         self.current_form.update(
             {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
         )
-        response = self.session.post(self.notification_endpoint, data=self.current_form)
-        with open("response.html", "wb") as f:
-            f.write(response.content)
+        self.session.post(self.notification_endpoint, data=self.current_form)
+        print("Feito!")
 
     def __fill_patient_data(self):
+        """Fill the patient data on the investigation form."""
+        print("Preenchendo dados do paciente...")
         self.current_form = {
             "AJAXREQUEST": "_viewRoot",
             "form": "form",
@@ -400,6 +439,8 @@ class Investigator:
 
         for builder in factory_form_builders:
             builder()
+        else:
+            print("[Preenchimento] Concluído!")
 
         # print(json.dumps(self.current_form, indent=4))
         self.__save_investigation()
@@ -423,11 +464,13 @@ class Investigator:
         Args:
             open_payload (dict): The payload to open the notification
         """
+        print("Abrindo ficha de NOTIFICAÇÃO do paciente...")
         response = self.session.post(
             self.open_notification_endpoint,
             data=open_payload,
         )
         self.soup = BeautifulSoup(response.content, "html.parser")
+        print("Ficha de NOTIFICAÇÃO aberta.")
 
     def __is_investigation_tab_enabled(self):
         """Check if the navigation tab is enabled (this must be called when the NOTIFICATION page is open)

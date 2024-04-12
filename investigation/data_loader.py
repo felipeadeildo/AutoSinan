@@ -129,7 +129,7 @@ class SinanGalData:
         """
         Method to clean the data. It logs the start of the cleaning process, loads the data, logs the successful data load, and then iterates through a list of cleaning functions to clean the data.
         """
-        self.logger.info("Limpando dados")
+        self.logger.info("CLEAN_DATA: Limpando dados")
         print("Iniciando a limpeza dos dados...")
 
         cleaners = [
@@ -138,7 +138,7 @@ class SinanGalData:
         for fn in cleaners:
             fn()
 
-        self.logger.info("Dados limpos")
+        self.logger.info("CLEAN_DATA: Dados limpos")
         print("Limpeza concluída.")
 
     def load(self):
@@ -146,19 +146,21 @@ class SinanGalData:
         Load method to load and preprocess GAL and SINAN datasets.
         """
         # GAL
-        self.logger.info("Obtendo o dataset do GAL")
+        self.logger.info("DATA_LOADER: Obtendo o dataset do GAL")
         print("Escolha o dataset do GAL para usar...")
         self.df = self.__get_df()
-        self.logger.info("Dataset do GAL obtido")
+        self.logger.info("DATA_LOADER:Dataset do GAL obtido")
 
         to_normalize = ["Paciente", "Nome da Mãe"]
-        self.logger.info(f"Normalizando colunas: {to_normalize}")
+        self.logger.info(f"DATA_LOADER: Normalizando colunas: {to_normalize}")
         normalize_columns(self.df, to_normalize)
         self.logger.info("Colunas normalizadas")
 
         to_setdatetime = ["Data de Nascimento", "Data do 1º Sintomas", "Data da Coleta"]
-        self.logger.info(f"Convertendo colunas para datetime: {to_setdatetime}")
+        self.logger.info(
+            f"DATA_LOADER: Convertendo colunas para datetime: {to_setdatetime}"
+        )
         to_datetime(self.df, to_setdatetime, format="%d-%m-%Y")
-        self.logger.info("Colunas convertidas para datetime")
+        self.logger.info("DATA_LOADER: Colunas convertidas para datetime")
 
         self.clean_data()

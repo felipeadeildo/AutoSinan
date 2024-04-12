@@ -126,7 +126,7 @@ class InvestigationBot(Bot):
         Args:
             patient (dict): The patient data
         """
-        print("Paciente:", patient["Paciente"])
+        print(f"Preenchendo investigação do paciente {patient['Paciente']}...")
         sinan_response = self.researcher.search(patient["Paciente"])
         open_payloads = [r["open_payload"] for r in sinan_response]
         done_data = []
@@ -135,7 +135,7 @@ class InvestigationBot(Bot):
                 self.logger.warning(
                     f"FILL_FORM: Nenhum resultado encontrado para {patient['Paciente']}."
                 )
-                print("Nenhum resultado encontrado.")
+                print("Nenhum resultado encontrado para este paciente.")
             case 1:
                 open_payload = next(iter(open_payloads))
                 result = self.investigator.investigate(patient.to_dict(), open_payload)
