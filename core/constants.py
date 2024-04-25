@@ -40,7 +40,7 @@ EXAMS_GAL_MAP: dict[str, POSSIBLE_EXAM_TYPES] = {
 EXAM_VALUE_COL_MAP: dict[POSSIBLE_EXAM_TYPES, str] = {
     "IgM": "Resultado",
     "NS1": "Resultado",
-    "PCR": "Status Exame",
+    "PCR": "Dengue",
 }
 """Represents the column name of the exam value in the unificated dataset."""
 
