@@ -114,3 +114,16 @@ SCRIPT_GENERATED_PATH = Path("script")
 
 
 SCRIPT_GENERATED_PATH.mkdir(exist_ok=True)
+
+
+SEARCH_POSSIBLE_CRITERIAS = Literal[
+    "Nome do paciente",
+    "Nome da mãe",
+    "Número da Notificação",
+    "Data de nascimento",
+]
+"""Possible search criteria for the notification research method."""
+
+
+POSSIBLE_AGRAVOS = Literal["A90 - DENGUE", "A92.0 - FEBRE DE CHIKUNGUNYA"]
+"""Possible agravos for the app in general"""

@@ -11,7 +11,13 @@ from bs4 import NavigableString, Tag
 from dbfread import DBF
 from icecream import ic
 
-from .constants import CREDENTIALS_FILE, SCRIPT_GENERATED_PATH, TODAY
+from .constants import (
+    CREDENTIALS_FILE,
+    CURRENT_YEAR_FIRST_DAY,
+    POSSIBLE_AGRAVOS,
+    SCRIPT_GENERATED_PATH,
+    TODAY,
+)
 
 
 def clear_screen():
@@ -152,3 +158,32 @@ def create_logger(name: str):
     logger.setLevel(logging.DEBUG)
     ic.configureOutput(includeContext=True)
     return logger
+
+
+def generate_search_base_payload(agravo: POSSIBLE_AGRAVOS):
+    """Generate base payload for Notification Researcher
+
+    Args:
+        agravo (str): Agravo to filter by (eg. A90 - DENGUE)
+
+    Returns:
+        dict: Base payload to use in payload construction
+    """
+    return {
+        "AJAXREQUEST": "_viewRoot",
+        "form": "form",
+        "form:consulta_tipoPeriodo": "0",
+        "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime(
+            "%d/%m/%Y"
+        ),
+        "form:consulta_dataInicialInputCurrentDate": TODAY.strftime("%m/%Y"),
+        "form:consulta_dataFinalInputDate": TODAY.strftime("%d/%m/%Y"),
+        "form:consulta_dataFinalInputCurrentDate": TODAY.strftime("%m/%Y"),
+        "form:richagravocomboboxField": agravo,
+        "form:richagravo": agravo,
+        "form:tipoUf": "3",  # Notificação ou Residência
+        "form:consulta_uf": "24",  # SC
+        "form:tipoSaida": "2",  # Lista de Notificação
+        "form:consulta_tipoCampo": "0",
+        "form:consulta_municipio_uf_id": "0",
+    }

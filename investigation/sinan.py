@@ -135,7 +135,7 @@ class InvestigationBot(Bot):
             patient (dict): The patient data
         """
         print(f"Preenchendo investigação do paciente {patient['Paciente']}...")
-        sinan_response = self.researcher.search(patient["Paciente"])
+        sinan_response = self.researcher.search(patient.to_dict())
         open_payloads = [r["open_payload"] for r in sinan_response]
         done_data = []
         match len(sinan_response):
