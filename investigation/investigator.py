@@ -1,3 +1,4 @@
+import json
 import logging
 import re
 from datetime import datetime
@@ -228,9 +229,9 @@ class Investigator:
                 sorotype_dengue = max(
                     sorotypes, key=lambda sorotype: int(sorotype.removeprefix("DENV"))
                 )  # DENV1, DENV2, etc.
-                if count := len(sorotypes) > 1:
+                if len(sorotypes) > 1:
                     self.logger.warning(
-                        f"Dos {count} sorotipos {tuple(sorotypes)} escolhido o maior: {sorotype_dengue}."
+                        f"Dos {len(sorotypes)} sorotipos {tuple(sorotypes)} escolhido o maior: {sorotype_dengue}."
                     )
                 self.current_form.update(
                     {
@@ -351,17 +352,15 @@ class Investigator:
     def __define_closing_date(self):
         """Insert the value of the closing date (67 - Data de Encerramento)"""
         print("[Preenchimento] Definindo 67 - Data de Encerramento...", end=" ")
-        if value := self.current_form["form:dengue_dataEncerramentoInputDate"]:
-            date_site = datetime.strptime(value, "%d/%m/%Y")
+        date_considered = self.current_form["form:dengue_dataEncerramentoInputDate"]
+        if date_considered:
+            date_site = datetime.strptime(date_considered, "%d/%m/%Y")
             if date_site < self.patient_data["Data da Coleta"]:
+                date_considered = TODAY.strftime("%d/%m/%Y")
                 self.logger.warning(
-                    f"Data de encerramento do site ({value}) menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Utilizando data de hoje ({TODAY.strftime('%d/%m/%Y')})."
+                    f"Data de encerramento do site ({date_site}) menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Utilizando data de hoje ({date_considered})."
                 )
-                self.current_form["form:dengue_dataEncerramentoInputDate"] = (
-                    TODAY.strftime("%d/%m/%Y")
-                )
-            print(f"Já existe data definida ({value}). Ignorado.")
-            return
+            print(f"Já existe data definida ({date_considered}). Esta será usada.")
         elif self.current_form["form:dengue_classificacao"] in ("11", "12"):
             print(
                 f"Classificação selecionada como '{CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}'. Ignorado."
@@ -369,24 +368,32 @@ class Investigator:
             return
 
         self.current_form.update(
-            {"form:dengue_dataEncerramentoInputDate": TODAY.strftime("%d/%m/%Y")}
+            {"form:dengue_dataEncerramentoInputDate": date_considered}
         )
         self.session.post(
             self.notification_endpoint,
             data={**self.current_form, "form:j_id739": "form:j_id739"},
         )
-        print("Feito!")
+        print(f"Data de encerramento utilizada: {date_considered}")
 
     def __define_investigation_date(self):
         """Define the investigation date (31 - Data da Investigação)"""
         print("[Preenchimento] Definindo data de investigação para o dia de hoje.")
-        self.current_form.update(
-            {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
+        closing_date = datetime.strptime(
+            self.current_form["form:dengue_dataEncerramentoInputDate"], "%d/%m/%Y"
         )
-        self.session.post(
-            self.notification_endpoint,
-            data={**self.current_form, "form:j_id402": "form:j_id402"},
-        )
+        if closing_date < TODAY:
+            self.logger.warning(
+                f"Data de encerramento no site ({closing_date.strftime('%d/%m/%Y')}) menor que a data de hoje ({TODAY.strftime('%d/%m/%Y')}). Portanto a data de investigação será definida para a data já existente: {self.current_form['form:dtInvestigacaoInputDate']}."
+            )
+        else:
+            self.current_form.update(
+                {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
+            )
+            self.session.post(
+                self.notification_endpoint,
+                data={**self.current_form, "form:j_id402": "form:j_id402"},
+            )
 
     def __select_clinical_signs(self):
         """Select the clinical signs (33 - Sinais Clinicos)"""
@@ -427,7 +434,7 @@ class Investigator:
         if errors_txt:
             self.logger.error(errors_txt)
             print("Erro!")
-            print(f"\tSite: '{errors_txt}'")
+            print(f"\tMensagem do Site: '{errors_txt}'")
             with open("save_investigation.html", "wb") as f:
                 f.write(res.content)
             exit(1)
@@ -717,6 +724,7 @@ class Investigator:
         form.update(
             {"form:j_id306": "Excluir", "javax.faces.ViewState": self._javax_view_state}
         )
+        # TODO: Uncomment this line to actually discard the notification
         # self.session.post(self.notification_endpoint, data=form)
 
     def __return_to_results_page(self):
@@ -724,19 +732,13 @@ class Investigator:
         form = {
             k: v
             for k, v in form.items()
-            if not (k.startswith("form:btn", "form:botao", "form:j_id"))
-            and k in ("form:j_id84", "form:j_id314")
+            if not k.startswith(("form:btn", "form:botao", "form:j_id"))
         }
+        self.__get_javafaces_view_state()
         form.update({"javax.faces.ViewState": self._javax_view_state})
-        self.session.post(self.notification_endpoint, data=form)
 
-        form.pop("form:j_id314", None)
         form.update({"form:j_id313": "Voltar"})
-        res = self.session.post(self.notification_endpoint, data=form)
-        with open("return_to_results_page.html", "wb") as f:
-            f.write(res.content)
-
-        exit(0)
+        self.session.post(self.notification_endpoint, data=form)
         # self.soup = BeautifulSoup(res.content, "html.parser")
 
     def investigate_multiple(self, patient_data: dict, open_payloads: List[dict]):
