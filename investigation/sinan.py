@@ -1,9 +1,17 @@
+from datetime import datetime
+
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
 from core.abstract import Bot
-from core.constants import SCRIPT_GENERATED_PATH, SINAN_BASE_URL, TODAY, USER_AGENT
+from core.constants import (
+    EXAMS_GAL_MAP,
+    SCRIPT_GENERATED_PATH,
+    SINAN_BASE_URL,
+    TODAY,
+    USER_AGENT,
+)
 from core.utils import create_logger, valid_tag
 from investigation.data_loader import SinanGalData
 from investigation.investigator import Investigator
@@ -144,8 +152,6 @@ class InvestigationBot(Bot):
                 self.logger.warning(
                     f"FILL_FORM: Multiplos resultados encontrados para {patient['Paciente']}."
                 )
-                # TODO: Investigate Mulltiple is too dangenerous, so, it only will be used when the function be safe.
-                return []
                 result = self.investigator.investigate_multiple(
                     patient.to_dict(), open_payloads
                 )
@@ -157,13 +163,14 @@ class InvestigationBot(Bot):
         self.logger.info("INICIANDO INVESTIGACAO")
         self._login()
         progress_data = []
-        run_datetime = TODAY.strftime("%d-%m-%Y_%H-%M-%S")
+        release_date = datetime.strptime(
+            input("Data de liberação (dd/mm/aaaa): "), "%d/%m/%Y"
+        )
+        tests = map(lambda e: EXAMS_GAL_MAP[e], self.data.df["Exame"].unique())
+        run_datetime = TODAY.strftime("%d.%m.%Y %H-%M")
+        log_filename = f"Investigação ({', '.join(tests)}) - liberação {release_date.strftime('%d.%m.%Y %H-%M')} - ({run_datetime}).xlsx"
         for _, patient in self.data.df.iterrows():
             done_data = self.__fill_form(patient)
             progress_data.extend(done_data)
             df = pd.DataFrame(progress_data)
-            df.to_excel(
-                SCRIPT_GENERATED_PATH
-                / f"Investigações Preenchidas {run_datetime}.xlsx",
-                index=False,
-            )
+            df.to_excel(SCRIPT_GENERATED_PATH / log_filename, index=False)
