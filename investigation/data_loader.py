@@ -92,7 +92,7 @@ class SinanGalData:
         print("Filtrando pacientes que irão ser usados para alimentar o SINAN...")
 
         rules = {
-            "IgM": lambda time: time >= pd.Timedelta(days=6),
+            "IgM": lambda time: time + pd.Timedelta(days=1) >= pd.Timedelta(days=6),
             "NS1": lambda time: time <= pd.Timedelta(days=5),
             "PCR": lambda time: time <= pd.Timedelta(days=5),
         }
