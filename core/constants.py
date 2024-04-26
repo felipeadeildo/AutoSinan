@@ -20,8 +20,8 @@ USER_AGENT = (
 """User agent string used to access the website"""
 
 
-CREDENTIALS_FILE = "credentials.json"
-"""Credentials file name with the credentials to access the website"""
+SETTINGS_FILE = "settings.toml"
+"""Settings file name with the configs used by the bots."""
 
 
 DATA_FOLDER = "dados"
@@ -126,4 +126,10 @@ SEARCH_POSSIBLE_CRITERIAS = Literal[
 
 
 POSSIBLE_AGRAVOS = Literal["A90 - DENGUE", "A92.0 - FEBRE DE CHIKUNGUNYA"]
-"""Possible agravos for the app in general"""
+"""[TypeHint] Possible agravos for the app in general"""
+
+POSSIBLE_AGRAVOS_LIST: list[POSSIBLE_AGRAVOS] = [
+    "A90 - DENGUE",
+    "A92.0 - FEBRE DE CHIKUNGUNYA",
+]
+"""List of possible agravos for the app in general"""

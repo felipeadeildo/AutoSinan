@@ -2,7 +2,7 @@ dados/*
 *.ipynb
 *.log
 **/*.html
-credentials.json
+settings.toml
 __pycache__/
 *.xlsx*
 *.json

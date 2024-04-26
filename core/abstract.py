@@ -4,15 +4,13 @@ from abc import ABC, abstractmethod
 class Bot(ABC):
     """Abstract Bot representation"""
 
-    def __init__(self, username: str, password: str):
-        """Initialize Bot with the Sinan Credentials
+    def __init__(self, settings: dict):
+        """Initialize Bot with the settings including the Sinan credentials
 
         Args:
-            username (str): Sinan Username
-            password (str): Sinan Password
+            settings (dict): Configuration
         """
-        self.username = username
-        self.password = password
+        raise NotImplementedError("init() not implemented")
 
     @abstractmethod
     def start(self):

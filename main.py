@@ -1,5 +1,5 @@
 from core.abstract import Bot
-from core.utils import clear_screen, get_sinan_credentials
+from core.utils import clear_screen, get_settings
 from investigation import InvestigationBot
 
 # from notification import NotificationBot
@@ -7,7 +7,7 @@ from investigation import InvestigationBot
 
 if __name__ == "__main__":
     clear_screen()
-    credentials = get_sinan_credentials()
+    settings = get_settings()
     bots: dict[str, type[Bot]] = {
         "Bot de Investigação": InvestigationBot
         # "Bot de Notificação": NotificationBot
@@ -18,4 +18,4 @@ if __name__ == "__main__":
 
     choice = int(input("Qual bot deseja executar? "))
     bot = bots[list(bots.keys())[choice - 1]]
-    bot(**credentials).start()
+    bot(settings).start()

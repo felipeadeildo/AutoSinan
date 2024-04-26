@@ -25,9 +25,10 @@ class InvestigationBot(Bot):
     - Verifying submitted forms
     """
 
-    def __init__(self, username: str, password: str) -> None:
-        self._username = username
-        self._password = password
+    def __init__(self, settings: dict) -> None:
+        self._username = settings["sinan_credentials"]["username"]
+        self._password = settings["sinan_credentials"]["password"]
+        self._settings = settings
         self.logger = create_logger("investigação")
 
         self._init_apps()
@@ -49,11 +50,9 @@ class InvestigationBot(Bot):
 
     def __create_notification_researcher(self):
         """Create a notification searcher that will be used to research notifications given a patient"""
-        # TODO: move the agravo to a settings.toml file
         self.logger.info("APP_FACTORY: Pesquisador de Notificação")
-        self.researcher = NotificationResearcher(
-            self.session, "A90 - DENGUE", self.logger
-        )
+        agravo = self._settings["sinan_investigacao"]["agravo"]
+        self.researcher = NotificationResearcher(self.session, agravo, self.logger)
         self.logger.info("APP_FACTORY: Pesquisador de Notificação criado")
 
     def __create_investigator(self):

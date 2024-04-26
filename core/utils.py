@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 import re
@@ -7,15 +6,17 @@ from typing import List
 
 import pandas as pd
 import requests
+import toml
 from bs4 import NavigableString, Tag
 from dbfread import DBF
 from icecream import ic
 
 from .constants import (
-    CREDENTIALS_FILE,
     CURRENT_YEAR_FIRST_DAY,
     POSSIBLE_AGRAVOS,
+    POSSIBLE_AGRAVOS_LIST,
     SCRIPT_GENERATED_PATH,
+    SETTINGS_FILE,
     TODAY,
 )
 
@@ -102,25 +103,46 @@ def valid_tag(tag: Tag | NavigableString | None) -> Tag | None:
     return tag
 
 
-def get_sinan_credentials():
-    """Get Sinan credentials from file or from user input
+def __create_initial_settings():
+    print("Sobre o Sinan Online:")
+    credentials = {
+        "username": input("Usuário: "),
+        "password": input("Senha: "),
+    }
+
+    print("Sobre as Investigações: ")
+    print("Escolha qual agravo será utilizado:")
+    for i, agravo in enumerate(POSSIBLE_AGRAVOS_LIST, 1):
+        print(f"\t{i} - {agravo}")
+    agravo = POSSIBLE_AGRAVOS_LIST[int(input("Agravo: ")) - 1]
+
+    investigacao = {
+        "agravo": agravo,
+    }
+
+    return {
+        "sinan_credentials": credentials,
+        "sinan_investigacao": investigacao,
+    }
+
+
+def get_settings():
+    """Get the configuration setted in `settings.toml`
 
     Returns:
-        dict: A dictionary with `username` and `password` keys
+        dict: Configuration document
     """
-    credentials_path = Path(CREDENTIALS_FILE)
-    if credentials_path.exists():
-        with credentials_path.open() as f:
-            credentials = json.load(f)
+    config_path = Path(SETTINGS_FILE)
+    if config_path.exists():
+        with config_path.open() as f:
+            settings = toml.load(f)
     else:
-        credentials = {
-            "username": input("Seu usuário: "),
-            "password": input("Sua senha: "),
-        }
-        with credentials_path.open("w") as f:
-            json.dump(credentials, f, indent=4)
+        settings = __create_initial_settings()
 
-    return credentials
+        with config_path.open("w") as f:
+            toml.dump(settings, f)
+
+    return settings
 
 
 def copy_session(session: requests.Session):
