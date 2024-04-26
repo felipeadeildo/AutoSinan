@@ -224,12 +224,17 @@ class Investigator:
             )
 
             if payload_exam_result == "1":
-                sorotype_dengue = self.current_form["Sorotipo"].removeprefix(
-                    "DENV"
-                )  # DENV1, DENV2, etc
+                sorotypes = self.patient_data["Sorotipo"].split(" e ")
+                sorotype_dengue = max(
+                    sorotypes, key=lambda sorotype: int(sorotype.removeprefix("DENV"))
+                )  # DENV1, DENV2, etc.
+                if count := len(sorotypes) > 1:
+                    self.logger.warning(
+                        f"Dos {count} sorotipos {tuple(sorotypes)} escolhido o maior: {sorotype_dengue}."
+                    )
                 self.current_form.update(
                     {
-                        "form:dengue_sorotipo": sorotype_dengue,
+                        "form:dengue_sorotipo": sorotype_dengue.removeprefix("DENV"),
                     }
                 )
                 # save the sorotype
@@ -276,7 +281,7 @@ class Investigator:
             raise Exception("Exame inválido")
 
         print(
-            f"[Preenchimento] Resultado do exame: {payload_exam_result} ({exam_result}) | Data de Coleta: {formatted_collection_date}"
+            f"[Preenchimento] Resultado do exame: {payload_exam_result} ({exam_result}) | Data da Coleta: {formatted_collection_date}"
         )
 
     def __get_classifications(
@@ -347,6 +352,14 @@ class Investigator:
         """Insert the value of the closing date (67 - Data de Encerramento)"""
         print("[Preenchimento] Definindo 67 - Data de Encerramento...", end=" ")
         if value := self.current_form["form:dengue_dataEncerramentoInputDate"]:
+            date_site = datetime.strptime(value, "%d/%m/%Y")
+            if date_site < self.patient_data["Data da Coleta"]:
+                self.logger.warning(
+                    f"Data de encerramento do site ({value}) menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Utilizando data de hoje ({TODAY.strftime('%d/%m/%Y')})."
+                )
+                self.current_form["form:dengue_dataEncerramentoInputDate"] = (
+                    TODAY.strftime("%d/%m/%Y")
+                )
             print(f"Já existe data definida ({value}). Ignorado.")
             return
         elif self.current_form["form:dengue_classificacao"] in ("11", "12"):
@@ -403,8 +416,23 @@ class Investigator:
         self.current_form.update(
             {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
         )
-        self.session.post(self.notification_endpoint, data=self.current_form)
+        res = self.session.post(self.notification_endpoint, data=self.current_form)
+        soup = BeautifulSoup(res.content, "html.parser")
+        errors_txt = False
+        if errors := soup.find_all("li", {"class": "error"}):
+            errors_txt = "\n".join(
+                [error.get_text() for error in errors if error.get_text()]
+            )
+
+        if errors_txt:
+            self.logger.error(errors_txt)
+            print("Erro!")
+            print(f"\tSite: '{errors_txt}'")
+            with open("save_investigation.html", "wb") as f:
+                f.write(res.content)
+            exit(1)
         print("Feito!")
+        # print(json.dumps(self.current_form, indent=2))
 
     def __fill_patient_data(self):
         """Fill the patient data on the investigation form."""
@@ -691,6 +719,26 @@ class Investigator:
         )
         # self.session.post(self.notification_endpoint, data=form)
 
+    def __return_to_results_page(self):
+        form = self.__get_form_data()
+        form = {
+            k: v
+            for k, v in form.items()
+            if not (k.startswith("form:btn", "form:botao", "form:j_id"))
+            and k in ("form:j_id84", "form:j_id314")
+        }
+        form.update({"javax.faces.ViewState": self._javax_view_state})
+        self.session.post(self.notification_endpoint, data=form)
+
+        form.pop("form:j_id314", None)
+        form.update({"form:j_id313": "Voltar"})
+        res = self.session.post(self.notification_endpoint, data=form)
+        with open("return_to_results_page.html", "wb") as f:
+            f.write(res.content)
+
+        exit(0)
+        # self.soup = BeautifulSoup(res.content, "html.parser")
+
     def investigate_multiple(self, patient_data: dict, open_payloads: List[dict]):
         """Investigate multiple patients filling out the patient data on the Sinan Investigation page
 
@@ -721,6 +769,7 @@ class Investigator:
                     "open_payload": open_payload,
                 },
             )
+            self.__return_to_results_page()
 
         notifications.sort(key=lambda n: n["notification_date"])
 
