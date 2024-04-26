@@ -12,10 +12,12 @@ from dbfread import DBF
 from icecream import ic
 
 from .constants import (
+    CRITERIA_OPERATIONS,
     CURRENT_YEAR_FIRST_DAY,
     POSSIBLE_AGRAVOS,
     POSSIBLE_AGRAVOS_LIST,
     SCRIPT_GENERATED_PATH,
+    SEARCH_POSSIBLE_CRITERIAS_LIST,
     SETTINGS_FILE,
     TODAY,
 )
@@ -116,8 +118,28 @@ def __create_initial_settings():
         print(f"\t{i} - {agravo}")
     agravo = POSSIBLE_AGRAVOS_LIST[int(input("Agravo: ")) - 1]
 
+    print(
+        "Sobre os critérios de pesquisa de paciente escolha quais devem ser utilizados e suas operações:"
+    )
+    criterias = {}
+    for criteria in SEARCH_POSSIBLE_CRITERIAS_LIST:
+        use_criteria = (
+            input(f"O bot pode usar o critério '{criteria}'? (s/n): ").lower() == "s"
+        )
+        if use_criteria:
+            possible_operations = CRITERIA_OPERATIONS[criteria]
+            print("\tEscolha qual operação deve ser realizada para o critério:")
+            for i, operation in enumerate(possible_operations, 1):
+                print(f"\t{i} - {operation}")
+            operation = possible_operations[int(input("Operação: ")) - 1]
+        else:
+            operation = None
+
+        criterias[criteria] = {"operacao": operation, "deve_usar": use_criteria}
+
     investigacao = {
         "agravo": agravo,
+        "criterios": criterias,
     }
 
     return {

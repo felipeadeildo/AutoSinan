@@ -122,8 +122,30 @@ SEARCH_POSSIBLE_CRITERIAS = Literal[
     "Número da Notificação",
     "Data de nascimento",
 ]
-"""Possible search criteria for the notification research method."""
+"""[TypeHint] Possible search criteria for the notification research method."""
 
+SEARCH_POSSIBLE_CRITERIAS_LIST: list[SEARCH_POSSIBLE_CRITERIAS] = [
+    "Nome do paciente",
+    "Nome da mãe",
+    "Número da Notificação",
+    "Data de nascimento",
+]
+"""List of possible search criteria for the notification research method."""
+
+CRITERIA_OPERATIONS: Mapping[SEARCH_POSSIBLE_CRITERIAS, list[str]] = {
+    "Nome do paciente": ["Igual", "Contendo", "Iniciando em"],
+    "Nome da mãe": ["Igual", "Contendo", "Iniciando em"],
+    "Data de nascimento": [
+        "Igual",
+        "Diferente",
+        "Maior",
+        "Menor",
+        "Maior ou igual",
+        "Menor ou igual",
+    ],
+    "Número da Notificação": ["Igual", "Diferente"],
+}
+"""Possible operations for each search criteria."""
 
 POSSIBLE_AGRAVOS = Literal["A90 - DENGUE", "A92.0 - FEBRE DE CHIKUNGUNYA"]
 """[TypeHint] Possible agravos for the app in general"""

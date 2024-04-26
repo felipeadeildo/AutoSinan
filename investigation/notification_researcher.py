@@ -6,8 +6,6 @@ from bs4 import BeautifulSoup
 from core.constants import POSSIBLE_AGRAVOS, SEARCH_POSSIBLE_CRITERIAS, SINAN_BASE_URL
 from core.utils import generate_search_base_payload, valid_tag
 
-# TODO: On Criterias, get the "OPERATOR" constant value from "settings.toml" for each criteria
-
 
 class Criterias:
     """Criterias of notification research methods to improve the research filters"""
@@ -15,6 +13,7 @@ class Criterias:
     def __init__(
         self,
         session: requests.Session,
+        criterias: dict,
         logger: logging.Logger,
         endpoint: str,
         base_payload: dict,
@@ -23,6 +22,7 @@ class Criterias:
         self.logger = logger
         self.base_payload = base_payload
         self.endpoint = endpoint
+        self.criterias = criterias
         self.current_criterias = []
 
     def __remove_criteria(self, criteria: SEARCH_POSSIBLE_CRITERIAS):
@@ -39,18 +39,15 @@ class Criterias:
         self.current_criterias.pop(criteria_index)
 
     def __patient_name_criteria(
-        self, patient_data: dict, field_type_id: str, operators: dict
+        self, patient_data: dict, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient name criteria on search"""
-
-        # Can be "Igual", "Contendo", or "Iniciando em"
-        OPERATOR = operators["Contendo"]
 
         payload = self.base_payload.copy()
         payload.update(
             {
                 "form:consulta_tipoCampo": field_type_id,
-                "form:consulta_operador": OPERATOR,
+                "form:consulta_operador": operator,
                 "form:consulta_dsTextoPesquisa": patient_data["Paciente"],
                 "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
@@ -61,17 +58,14 @@ class Criterias:
         self.current_criterias.append("Nome do paciente")
 
     def __patient_notification_criteria(
-        self, patient_data: dict, field_type_id: str, operators: dict
+        self, patient_data: dict, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient notification number criteria on search"""
-        # This operator can be "Igual" or "Diferente"
-        OPERATOR = operators["Igual"]
-
         payload = self.base_payload.copy()
         payload.update(
             {
                 "form:consulta.tipoCampo": field_type_id,
-                "form:consulta_operador": OPERATOR,
+                "form:consulta_operador": operator,
                 "form:consulta_dsTextoPesquisa": patient_data["Núm. Notificação Sinan"],
                 "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
@@ -81,16 +75,40 @@ class Criterias:
         self.current_criterias.append("Número da Notificação")
 
     def __patient_date_of_birth_criteria(
-        self, patient_data: dict, field_type_id: str, operators: dict
+        self, patient_data: dict, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient date of birth criteria on search"""
-        ...
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:consulta.tipoCampo": field_type_id,
+                "form:consulta_operador": operator,
+                "form:consulta_dsTextoPesquisa": patient_data["Data de Nascimento"],
+                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
+                "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
+            }
+        )
 
-    def __patient_moth_name_criteria(
-        self, patient_data: dict, field_type_id: str, operators: dict
+        self.session.post(self.endpoint, data=payload)
+        self.current_criterias.append("Data de nascimento")
+
+    def __patient_mother_name_criteria(
+        self, patient_data: dict, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient month name criteria on search"""
-        ...
+        payload = self.base_payload.copy()
+        payload.update(
+            {
+                "form:consulta.tipoCampo": field_type_id,
+                "form:consulta_operador": operator,
+                "form:consulta_dsTextoPesquisa": patient_data["Nome da Mãe"],
+                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
+                "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
+            }
+        )
+
+        self.session.post(self.endpoint, data=payload)
+        self.current_criterias.append("Nome da mãe")
 
     def __select_criteria_field(self, criteria: SEARCH_POSSIBLE_CRITERIAS):
         """Send the payload to select the filter criterion field and load the params on the session
@@ -145,14 +163,17 @@ class Criterias:
         """
         criterias = {
             "Nome do paciente": self.__patient_name_criteria,
-            "Nome da mãe": self.__patient_moth_name_criteria,
+            "Nome da mãe": self.__patient_mother_name_criteria,
             "Número da Notificação": self.__patient_notification_criteria,
             "Data de nascimento": self.__patient_date_of_birth_criteria,
         }
 
         field_type_id, operators = self.__select_criteria_field(criteria)
 
-        criterias[criteria](patient_data, field_type_id, operators)
+        operation = self.criterias[criteria]["operacao"]
+        operator = operators[operation]
+
+        criterias[criteria](patient_data, field_type_id, operator)
 
 
 class NotificationResearcher(Criterias):
@@ -161,6 +182,8 @@ class NotificationResearcher(Criterias):
     Args:
         session (requests.Session): Requests session logged obj
         agravo (str): Agravo to filter by (eg. A90 - DENGUE)
+        criterios (dict): Criterio configuration (criterios to be used)
+        logger (logging.Logger): Logger client.
 
     Methods:
         consultar(self, patient: str): Consult a notification and return the response
@@ -170,16 +193,19 @@ class NotificationResearcher(Criterias):
         self,
         session: requests.Session,
         agravo: POSSIBLE_AGRAVOS,
+        criterias: dict,
         logger: logging.Logger,
     ):
-        self.session = session
-        self.base_payload = generate_search_base_payload(agravo)
-        self.endpoint = (
-            f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
-        )
-        self.logger = logger
+        endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+        base_payload = generate_search_base_payload(agravo)
 
-        super().__init__(self.session, self.logger, self.endpoint, self.base_payload)
+        super().__init__(
+            session,
+            criterias,
+            logger,
+            endpoint,
+            base_payload,
+        )
 
     def __select_agravo(self):
         """Send the payload to select the agravo"""
@@ -243,8 +269,13 @@ class NotificationResearcher(Criterias):
         if use_notification_number:
             criterias.extend(["Número da Notificação"])
         else:
-            # TODO: Add "Nome da mãe" e "Data de Nascimento"
-            criterias.extend(["Nome do paciente"])
+            criterias.extend(
+                [
+                    k
+                    for k in self.criterias.keys()
+                    if k != "Número da Notificação" and self.criterias[k]["deve_usar"]
+                ]
+            )
 
         for criteria in criterias:
             self.add_criteria(criteria, patient)
@@ -300,4 +331,5 @@ class NotificationResearcher(Criterias):
             value.update(open_payload=payload)
             values.append(value)
 
+        return values
         return values

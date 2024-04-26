@@ -52,7 +52,8 @@ class InvestigationBot(Bot):
         """Create a notification searcher that will be used to research notifications given a patient"""
         self.logger.info("APP_FACTORY: Pesquisador de Notificação")
         agravo = self._settings["sinan_investigacao"]["agravo"]
-        self.researcher = NotificationResearcher(self.session, agravo, self.logger)
+        criterios = self._settings["sinan_investigacao"]["criterios"]
+        self.researcher = NotificationResearcher(self.session, agravo, criterios, self.logger)
         self.logger.info("APP_FACTORY: Pesquisador de Notificação criado")
 
     def __create_investigator(self):
