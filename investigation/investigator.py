@@ -335,6 +335,16 @@ class Investigator:
             self.current_form.update({"form:dengue_classificacao": "10"})
         elif any(map(lambda k: k == "5", classifications)):
             self.current_form.update({"form:dengue_classificacao": "5"})
+
+        classification = self.current_form["form:dengue_classificacao"]
+        if not classification:
+            print("[PREENCHIMENTO] Nenhuma classificação definida para este paciente.")
+            self.reporter.warn(
+                "Nenhuma classificação definida para este paciente.",
+                "Isto impede a definição da data de encerramento.",
+            )
+            return
+
         self.session.post(
             self.notification_endpoint,
             data={**self.current_form, "form:j_id713": "form:j_id713"},
@@ -357,7 +367,12 @@ class Investigator:
     def __define_closing_date(self):
         """Insert the value of the closing date (67 - Data de Encerramento)"""
         print("[PREENCHIMENTO] Definindo Data de Encerramento.", end=" ")
-        date_considered = self.current_form["form:dengue_dataEncerramentoInputDate"].strip()
+        if not self.current_form["form:dengue_classificacao"]:
+            print("Classificação não definida. Ignorando data de encerramento.")
+            return
+        date_considered = self.current_form[
+            "form:dengue_dataEncerramentoInputDate"
+        ].strip()
         if date_considered:
             date_site = datetime.strptime(date_considered, "%d/%m/%Y")
             if date_site < self.patient_data["Data da Coleta"]:
