@@ -21,10 +21,10 @@ class Report:
             "Data de Nascimento",
             "Tipo de Exame",
             "Resultado do Exame",
-            "Data e Hora",
             "Mensagem",
             "Importância da Mensagem",
             "Observações",
+            "Data e Hora",
         ]
         self.df = pd.DataFrame(columns=self.columns)
         self.df = self.df[self.columns]
@@ -93,14 +93,15 @@ class Report:
         row = self.__current_patient.copy()
         if row.get("Nome do Paciente") is None:
             observation = (
-                f"Esta é uma mensagem sem relação à algum paciente.\n{observation}"
+                f"{observation} (Esta é uma mensagem sem relação à algum paciente)"
             )
 
         row.update(
             {
                 "Mensagem": message,
                 "Importância da Mensagem": self.__importance_map[importance],
-                "Observação": observation.strip(),
+                "Observações": observation.strip(),
+                "Data e Hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
             }
         )
 
