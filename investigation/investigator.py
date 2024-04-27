@@ -1,6 +1,5 @@
-import json
-import logging
 import re
+import time
 from datetime import datetime
 from typing import List, Mapping, Optional
 
@@ -20,20 +19,26 @@ from core.constants import (
     NotificationType,
 )
 from core.utils import valid_tag
+from investigation.report import Report
 
-# from icecream import ic
+
+class NotFoundError(Exception):
+    """Raised when something in the page was not found."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
 
 
 class Investigator:
     """Given a patient data and your payload to open the Sinan page, this class will be used to investigate the patient."""
 
-    def __init__(self, session: requests.Session, logger: logging.Logger) -> None:
+    def __init__(self, session: requests.Session, reporter: Report) -> None:
         self.session = session
         self.open_notification_endpoint = (
             f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
         )
         self.notification_endpoint = f"{SINAN_BASE_URL}/sinan/secured/notificacao/individual/dengue/dengueIndividual.jsf"
-        self.logger = logger
+        self.reporter = reporter
 
     def __get_form_data(
         self, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}
@@ -51,8 +56,7 @@ class Investigator:
         form = valid_tag(self.soup.find(tag_name, attrs=attrs))
 
         if not form:
-            print("Form not found.")
-            exit(1)
+            raise NotFoundError(f"Formulário <{tag_name} {attrs} /> não encontrado.")
 
         def get_value(input_tag):
             input_type = input_tag.get("type", "text")
@@ -79,7 +83,7 @@ class Investigator:
 
         return {**inputs, **selects}
 
-    def __submit_modal_ok(self):
+    def __submit_modal_ok(self, clicks: int):
         """Click in "Ok" buttom if modal appears in the response"""
         show_modal_script = next(
             (
@@ -90,11 +94,11 @@ class Investigator:
             None,
         )
         if not show_modal_script:
-            self.logger.error(
-                "Script pra mostrar o modal na resposta do servidor não encontrado."
+            self.reporter.error(
+                "Script que mostra o popUp não foi encontrado na resposta do servidor. Provável mudança no site."
+                "Paciente não pôde ser investigado."
             )
-            print("Script pra mostrar o modal na resposta do servidor não encontrado.")
-            return
+            raise NotFoundError("Script pra mostrar o popUp não encontrado.")
 
         show_modal_text = "".join(show_modal_script.text.split("\n")).strip()
 
@@ -102,30 +106,32 @@ class Investigator:
             r"getElementById\(['\"]([^'\"]+)['\"]\)", show_modal_text
         )
         if not modal_id_match:
-            print("Error: Modal id not found")
-            raise ValueError("Modal id not found")
+            self.reporter.error(
+                "ID do popUp não encontrado na resposta do servidor.",
+                "Paciente não pôde ser investigado.",
+            )
+            raise NotFoundError("ID do popUp não encontrado na resposta do servidor.")
 
         modal_id = modal_id_match.group(1)
         modal_text = self.soup.find("div", {"id": modal_id}).get_text(strip=True)  # type: ignore [fé]
-        print(f"Texto apresentado no popUp: {modal_text}")
-        self.done_data.update({"Texto do PopUp de Confirmação (script)": modal_text})
+        self.reporter.info(f"Texto do popUp {clicks}: {modal_text}")
         payload_modal_ok = self.__get_form_data("div", {"id": modal_id})
         payload_modal_ok = {
             k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
         }
         self.current_form.pop("form:botaoSalvar", None)
 
-        print("Clicando em 'ok' para continuar...")
+        print("[INVESTIGAÇÃO] Clicando em 'Ok' para continuar.", end=" ")
         response = self.session.post(
             self.notification_endpoint,
             data={**self.current_form, **payload_modal_ok},
         )
         self.soup = BeautifulSoup(response.content, "html.parser")
 
-        print("Tudo ok, continuando...")
-        return self.__finish_open_investigation()
+        print("Ok!")
+        return self.__finish_open_investigation(clicks + 1)
 
-    def __finish_open_investigation(self):
+    def __finish_open_investigation(self, clicks: int = 1):
         first_investigation_input = valid_tag(
             self.soup.find("input", attrs={"id": "form:dtInvestigacaoInputDate"})
         )
@@ -133,9 +139,9 @@ class Investigator:
         if not first_investigation_input:
             try:
                 print(
-                    "Ao tentar abrir aba de investigação apareceu um 'popUp'... Clicando em 'ok'..."
+                    f"[INVESTIGAÇÃO] Apareceu um popUp ao tentar salvar a Notificação. Clicando em 'Ok' para continuar ({clicks})."
                 )
-                self.__submit_modal_ok()
+                self.__submit_modal_ok(clicks)
             except ValueError:
                 # TODO: handle modal not found
                 pass
@@ -146,7 +152,7 @@ class Investigator:
         Args:
             form_data (dict): The patient form data to open investigation
         """
-        print("Abrindo aba de investigação...")
+        print("[INVESTIGAÇÃO] Abrindo aba de investigação.")
         self.current_form = self.__get_form_data()
         self.current_form = {
             k: v
@@ -183,7 +189,6 @@ class Investigator:
         self.soup = BeautifulSoup(response.content, "html.parser")
 
         self.__finish_open_investigation()
-        print("Aba de investigação aberta para preenchimento.")
 
     def __define_exam_result_data(self):
         """Get the payload with the exam result which is one of the options in the Sinan Investigation Form and fill the exam result.
@@ -194,9 +199,7 @@ class Investigator:
             47 - Sorotipo
         """
         exam_type = EXAMS_GAL_MAP[self.patient_data["Exame"]]
-        print(
-            f"[Preenchimento] Definindo resultado do exame para exame do tipo {exam_type}"
-        )
+        print(f"[PREENCHIMENTO] Definindo resultado para exame tipo {exam_type}.")
         exam_result_map = EXAM_RESULT_ID[exam_type]
         formatted_collection_date = self.patient_data["Data da Coleta"].strftime(
             "%d/%m/%Y"
@@ -230,8 +233,8 @@ class Investigator:
                     sorotypes, key=lambda sorotype: int(sorotype.removeprefix("DENV"))
                 )  # DENV1, DENV2, etc.
                 if len(sorotypes) > 1:
-                    self.logger.warning(
-                        f"Dos {len(sorotypes)} sorotipos {tuple(sorotypes)} escolhido o maior: {sorotype_dengue}."
+                    self.reporter.warn(
+                        f"Dos {len(sorotypes)} sorotipos ({'; '.join(sorotypes)}), foi escolhido o maior: {sorotype_dengue}."
                     )
                 self.current_form.update(
                     {
@@ -279,10 +282,10 @@ class Investigator:
                 }
             )
         else:
-            raise Exception("Exame inválido")
+            raise Exception("O tipo de exame não foi definido corretamente.")
 
         print(
-            f"[Preenchimento] Resultado do exame: {payload_exam_result} ({exam_result}) | Data da Coleta: {formatted_collection_date}"
+            f"[PREENCHIMENTO] Resultado do exame: {exam_result} | Data da Coleta: {formatted_collection_date}"
         )
 
     def __get_classifications(
@@ -309,11 +312,14 @@ class Investigator:
 
     def __select_classification(self):
         """Select the classification based on the exam results (62 - Classificação)"""
-        print("[Preenchimento] Selecionando a classificação do exame")
         if self.current_form["form:dengue_classificacao"] in ("11", "12"):
             classification = self.current_form["form:dengue_classificacao"]
+            self.reporter.warn(
+                f"Investigação JÁ possui classificação: {CLASSIFICATION_FRIENDLY_MAP[classification]}",
+                "Permanece classificação definida do site.",
+            )
             print(
-                f"[Preenchimento] Classificação já selecionada com '{CLASSIFICATION_FRIENDLY_MAP[classification]}'. Ignorado."
+                f"[PREENCHIMENTO] Classificação JÁ selecionada como '{CLASSIFICATION_FRIENDLY_MAP[classification]}'."
             )
             return
 
@@ -326,23 +332,22 @@ class Investigator:
         classifications = self.__get_classifications(exam_results)
 
         if any(map(lambda k: k == "10", classifications)):
-            print(
-                f"[Preenchimento] Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP["10"]}"
-            )
             self.current_form.update({"form:dengue_classificacao": "10"})
         elif any(map(lambda k: k == "5", classifications)):
-            print(
-                f"[Preenchimento] Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP["5"]}"
-            )
             self.current_form.update({"form:dengue_classificacao": "5"})
         self.session.post(
             self.notification_endpoint,
             data={**self.current_form, "form:j_id713": "form:j_id713"},
         )
+        self.reporter.debug(
+            f"Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}"
+        )
+        print(
+            f"[PREENCHIMENTO] Classificação selecionada: {CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}"
+        )
 
     def __select_criteria(self):
         """Select the confirmation criteria (63 - Critério de Confirmação)"""
-        print("[Preenchimento] Selecionando o critério de confirmação")
         self.current_form.update({"form:dengue_criterio": "1"})
         self.session.post(
             self.notification_endpoint,
@@ -351,21 +356,25 @@ class Investigator:
 
     def __define_closing_date(self):
         """Insert the value of the closing date (67 - Data de Encerramento)"""
-        print("[Preenchimento] Definindo 67 - Data de Encerramento...", end=" ")
-        date_considered = self.current_form["form:dengue_dataEncerramentoInputDate"]
+        print("[PREENCHIMENTO] Definindo Data de Encerramento.", end=" ")
+        date_considered = self.current_form["form:dengue_dataEncerramentoInputDate"].strip()
         if date_considered:
             date_site = datetime.strptime(date_considered, "%d/%m/%Y")
             if date_site < self.patient_data["Data da Coleta"]:
                 date_considered = TODAY.strftime("%d/%m/%Y")
-                self.logger.warning(
-                    f"Data de encerramento do site ({date_site}) menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Utilizando data de hoje ({date_considered})."
+                self.reporter.warn(
+                    f"Data de encerramento do site ({date_site}) é menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Portanto será utilizada a data de hoje ({date_considered}) para o encerramento."
                 )
-            print(f"Já existe data definida ({date_considered}). Esta será usada.")
         elif self.current_form["form:dengue_classificacao"] in ("11", "12"):
             print(
                 f"Classificação selecionada como '{CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}'. Ignorado."
             )
+            self.reporter.warn(
+                f"Não foi definido data de encerramento pois classificação está selecionada como {CLASSIFICATION_FRIENDLY_MAP[self.current_form['form:dengue_classificacao']]}"
+            )
             return
+        else:
+            date_considered = TODAY.strftime("%d/%m/%Y")
 
         self.current_form.update(
             {"form:dengue_dataEncerramentoInputDate": date_considered}
@@ -374,30 +383,32 @@ class Investigator:
             self.notification_endpoint,
             data={**self.current_form, "form:j_id739": "form:j_id739"},
         )
-        print(f"Data de encerramento utilizada: {date_considered}")
+        print(f"Data de encerramento utilizada: {date_considered}. Ok!")
 
     def __define_investigation_date(self):
         """Define the investigation date (31 - Data da Investigação)"""
-        print("[Preenchimento] Definindo data de investigação para o dia de hoje.")
-        closing_date = datetime.strptime(
-            self.current_form["form:dengue_dataEncerramentoInputDate"], "%d/%m/%Y"
-        )
-        if closing_date < TODAY:
-            self.logger.warning(
-                f"Data de encerramento no site ({closing_date.strftime('%d/%m/%Y')}) menor que a data de hoje ({TODAY.strftime('%d/%m/%Y')}). Portanto a data de investigação será definida para a data já existente: {self.current_form['form:dtInvestigacaoInputDate']}."
-            )
+        print("[PRRENCHIMENTO] Tentando definir 31 - Data da Investigação.", end=" ")
+        today_formatted = TODAY.strftime("%d/%m/%Y")
+        closing_date_formatted = self.current_form[
+            "form:dengue_dataEncerramentoInputDate"
+        ]
+
+        if closing_date_formatted:
+            closing_date = datetime.strptime(closing_date_formatted, "%d/%m/%Y")
+            if closing_date < TODAY:
+                self.reporter.warn(
+                    f"Data de encerramento no site ({closing_date_formatted}) é menor que a data de hoje ({today_formatted}). Portanto a data de investigação será definida para a data que está no site: {self.current_form['form:dtInvestigacaoInputDate']}."
+                )
         else:
-            self.current_form.update(
-                {"form:dtInvestigacaoInputDate": TODAY.strftime("%d/%m/%Y")}
-            )
+            self.current_form.update({"form:dtInvestigacaoInputDate": today_formatted})
             self.session.post(
                 self.notification_endpoint,
                 data={**self.current_form, "form:j_id402": "form:j_id402"},
             )
+        print(f"Data de investigação definida: {today_formatted}. Ok!")
 
     def __select_clinical_signs(self):
         """Select the clinical signs (33 - Sinais Clinicos)"""
-        print("[Preenchimento] Selecionando 33 - Sinais Clinicos")
         self.current_form.update(
             {
                 k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
@@ -408,7 +419,6 @@ class Investigator:
 
     def __select_illnesses(self):
         """Select the illnesses (34 - Doencas Pré-existentes)"""
-        print("[Preenchimento] Selecionando 34 - Doencas Pré-existentes")
         self.current_form.update(
             {
                 k: ((v or "2") if not self.force_clinal_signs_and_illnesses else "2")
@@ -419,7 +429,7 @@ class Investigator:
 
     def __save_investigation(self):
         """Save the Investigation filled form date and submit it."""
-        print("Salvando investigação preenchida...", end=" ")
+        print("[INVESTIGAÇÃO] Salvando investigação preenchida.", end=" ")
         self.current_form.update(
             {"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"}
         )
@@ -432,18 +442,17 @@ class Investigator:
             )
 
         if errors_txt:
-            self.logger.error(errors_txt)
+            self.reporter.error(
+                "Ao tentar salvar a investigação o site retornou esta mensagem de erro (ver observações)",
+                errors_txt,
+            )
             print("Erro!")
             print(f"\tMensagem do Site: '{errors_txt}'")
-            with open("save_investigation.html", "wb") as f:
-                f.write(res.content)
-            exit(1)
-        print("Feito!")
-        # print(json.dumps(self.current_form, indent=2))
+        print("Ok!")
 
     def __fill_patient_data(self):
         """Fill the patient data on the investigation form."""
-        print("Preenchendo dados do paciente...")
+        print("[INVESTIGAÇÃO] Preenchendo dados do paciente.")
         self.current_form = {
             "AJAXREQUEST": "_viewRoot",
             "form": "form",
@@ -475,9 +484,8 @@ class Investigator:
         for builder in factory_form_builders:
             builder()
         else:
-            print("[Preenchimento] Concluído!")
+            print("[INVESTIGAÇÃO] Preenchimento Concluído. Salvando.")
 
-        # print(json.dumps(self.current_form, indent=4))
         self.__save_investigation()
 
     def __get_javafaces_view_state(self):
@@ -487,25 +495,26 @@ class Investigator:
         )
 
         if not self._javax_view_state:
-            self.logger.error("javax.faces.ViewState not found.")
-            print("Não foi possível obter o javax.faces.ViewState.")
-            return
+            raise FileNotFoundError("Não foi possível obter o token de visualização.")
 
         self._javax_view_state = self._javax_view_state.get("value")
 
-    def __open_notification_page(self, open_payload: dict):
+    def __open_notification_page(self, open_payload: dict, clicks: int = 1):
         """Open the patient's notification page (just the notification page, without doing the investigation)
 
         Args:
             open_payload (dict): The payload to open the notification
         """
-        print("Abrindo ficha de NOTIFICAÇÃO do paciente...")
+        print(
+            f"[INVESTIGAÇÃO] Abrindo ficha de Notificação do paciente ({clicks}).",
+            end=" ",
+        )
         response = self.session.post(
             self.open_notification_endpoint,
             data=open_payload,
         )
         self.soup = BeautifulSoup(response.content, "html.parser")
-        print("Ficha de NOTIFICAÇÃO aberta.")
+        print("Ok!")
 
     def __is_investigation_tab_enabled(self):
         """Check if the navigation tab is enabled (this must be called when the NOTIFICATION page is open)
@@ -517,21 +526,20 @@ class Investigator:
             self.soup.find(attrs={"id": "form:tabInvestigacao_lbl"})
         )
         if not investigation_tab:
-            self.logger.error("Tag de investigação não encontrada.")
-            print("Erro: A tag de investigação não foi encontrada.")
-            return
+            print("[INVESTIGAÇÃO] Erro: A aba de investigação não foi encontrada.")
+            raise FileNotFoundError
 
         return "rich-tab-disabled" in (investigation_tab.get("class") or [])
 
-    def __open_investigation_page(self, open_payload: dict):
+    def __open_investigation_page(self, open_payload: dict, clicks: int = 1):
         """Open the investigation page that will be used to fill the patient exam data
 
         Args:
             open_payload (dict): The payload to open the investigation (from the Sinan Researcher class)
         """
-        self.__open_notification_page(open_payload)
-        self.__get_javafaces_view_state()
+        self.__open_notification_page(open_payload, clicks)
 
+        self.__get_javafaces_view_state()
         self.force_clinal_signs_and_illnesses = self.__is_investigation_tab_enabled()
         self.__enable_and_open_investigation()
 
@@ -546,14 +554,29 @@ class Investigator:
             patient_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             open_payload (dict): The payload to open the investigation (from the Sinan Researcher class)
         """
-        self.done_data = patient_data.copy()
-        self.patient_data = patient_data
-        self.__open_investigation_page(open_payload)
+        start_time = time.time()
+        try:
+            self.patient_data = patient_data
+            self.__open_investigation_page(open_payload)
 
-        self.current_form = self.__get_form_data()
+            self.current_form = self.__get_form_data()
 
-        self.__fill_patient_data()
-        return self.done_data
+            self.__fill_patient_data()
+        except NotFoundError as e:
+            print(f"[INVESTIGAÇÃO] Erro: {e}")
+            self.reporter.error("Erro na investigação (ver observações)", str(e))
+            with open(
+                f"investigação - {self.patient_data['Paciente']}.html",
+                "w",
+                encoding="utf-8",
+            ) as f:
+                f.write(self.soup.prettify())
+            return
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        self.reporter.debug(
+            f"Tempo para esta investigação foi de {elapsed_time:.2f} segundos"
+        )
 
     def __get_notification_date(self) -> Optional[datetime]:
         """Get the notification date from the notification page
@@ -566,9 +589,7 @@ class Investigator:
             self.soup.find(attrs={"id": "form:dtNotificacaoInputDate"})
         )
         if not notification_date:
-            self.logger.error("A tag de data de notificação não foi encontrada.")
-            print("Erro: A tag de investigação não foi encontrada.")
-            return
+            raise NotFoundError("Não foi possível obter a data de notificação.")
 
         notification_date_str = notification_date.get("value")
 
@@ -576,22 +597,16 @@ class Investigator:
             notification_date_str = next(iter(notification_date_str), None)
 
         if not notification_date_str:
-            self.logger.error(
-                "Nenhum valor para o atributo de data de notificação encontrado."
+            raise NotFoundError(
+                "Não foi possível obter a data de notificação. (O campo está vazio (?))"
             )
-            print(
-                "Erro: Nenhum valor para o atributo de data de notificação encontrado."
-            )
-            return
 
         try:
             date = datetime.strptime(notification_date_str, "%d/%m/%Y")
         except ValueError:
-            self.logger.error(
-                f"Erro ao converter a data de notificação: {notification_date_str}"
+            raise NotFoundError(
+                f"Não foi possível obter a data de notificação. (O formato não é o esperado): {notification_date_str}"
             )
-            print(f"Erro ao converter a data de notificação: {notification_date_str}")
-            return
         return date
 
     def __compare_investigations_data(
@@ -669,7 +684,9 @@ class Investigator:
 
         # 1. No result has investigation: Consider only the oldest notification and descard others
         if not all(notification["has_investigation"] for notification in notifications):
-            print("Todos os resultados não possuem ficha de investigação.")
+            print(
+                "[INVESTIGAÇÃO MÚLTIPLA] Todas as Notificações NÃO possuem ficha de investigação."
+            )
             notification_considered = min(
                 notifications, key=lambda n: n["notification_date"]
             )
@@ -684,10 +701,12 @@ class Investigator:
 
         # 2. Every result has investigation: Compare all notifications exams as defined in the Google Doc document
         elif all(notification["has_investigation"] for notification in notifications):
-            print("Todos os resultados possuem ficha de investigação.")
+            print(
+                "[INVESTIGAÇÃO MÚLTIPLA] Todas as Notificações POSSUEM ficha de investigação."
+            )
             notifications_data = []
-            for notification in notifications:
-                self.__open_investigation_page(notification["open_payload"])
+            for i, notification in enumerate(notifications, 1):
+                self.__open_investigation_page(notification["open_payload"], i)
                 investigation_form_data = self.__get_form_data()
                 notifications_data.append(
                     {"notification": notification, "form_data": investigation_form_data}
@@ -700,7 +719,7 @@ class Investigator:
         # 3. Results with investigation and without investigation: Consider only notifications with investigation and descard others
         else:
             print(
-                "Resultados com ficha de investigação e resultados sem ficha de investigação."
+                "[INVESTIGAÇÃO MÚLTIPLA] Algumas notificações com ficha de investigação e outras sem ficha de investigação."
             )
             for notification in notifications:
                 if notification["has_investigation"]:
@@ -716,7 +735,6 @@ class Investigator:
         Args:
             open_payload (dict): The payload to open the notification
         """
-        self.logger.warning(f"INVESTIGATOR.discard_notification: {open_payload}")
         self.__open_notification_page(open_payload)
         form = self.__get_form_data()
         form.pop("form:botaoSalvar", None)
@@ -739,7 +757,6 @@ class Investigator:
 
         form.update({"form:j_id313": "Voltar"})
         self.session.post(self.notification_endpoint, data=form)
-        # self.soup = BeautifulSoup(res.content, "html.parser")
 
     def investigate_multiple(self, patient_data: dict, open_payloads: List[dict]):
         """Investigate multiple patients filling out the patient data on the Sinan Investigation page
@@ -748,20 +765,23 @@ class Investigator:
             patients_data (dict): The patient date came from the data loader (SINAN + GAL datasets)
             open_payloads (dict): The payloads to open the notifications (from the Sinan Researcher class)
         """
-        self.logger.info(f"INVESTIGATOR.investigate_multiple: {patient_data}")
         notifications: List[NotificationType] = []
-        done_data = []
         for i, open_payload in enumerate(open_payloads, 1):
-            self.__open_notification_page(open_payload)
-            has_investigation = self.__is_investigation_tab_enabled()
-            if has_investigation is None:
-                self.logger.warning(
-                    f"INVESTIGATOR.investigate_multiple: {patient_data} | {i} | {open_payload} | {has_investigation}"
+            try:
+                self.__open_notification_page(open_payload)
+                has_investigation = self.__is_investigation_tab_enabled()
+                notification_date = self.__get_notification_date()
+            except NotFoundError as e:
+                self.reporter.error(
+                    f"O resultado de índice {i} teve algum erro. (Ver Observações)",
+                    str(e),
                 )
                 return
 
-            notification_date = self.__get_notification_date()
             if notification_date is None:
+                self.reporter.error(
+                    f"O resultado de índice {i} teve algum erro ao tentar obter a data da notificação.",
+                )
                 return
 
             notifications.append(
@@ -775,45 +795,50 @@ class Investigator:
 
         notifications.sort(key=lambda n: n["notification_date"])
 
-        for notification in notifications[1:]:
+        notifications_spaced = [notifications[0]]
+        notifications_discarded_by_space = []
+
+        for i, notification in enumerate(notifications[1:], 1):
             diff_days = (
                 notification["notification_date"]
-                - notifications[0]["notification_date"]
+                - notifications_spaced[-1]["notification_date"]
             ).days
             if diff_days < 15:
-                self.logger.info(
-                    f"INVESTIGATOR.investigate_multiple: {patient_data} | {diff_days} | {notification['notification_date']}\n\n"
-                    "Descartada por ter menos de 15 dias de diferença"
+                self.reporter.warn(
+                    f"A notificação de data {notification['notification_date'].strftime('%d/%m/%Y')} é muito recente comparada a notificação de data {notifications_spaced[-1]['notification_date'].strftime('%d/%m/%Y')} tendo a diferença de {diff_days} dias. Portanto será descartada."
                 )
-                print(f"Notificação descartada: {notification['notification_date']}")
+                notifications_discarded_by_space.append(notification)
+            else:
+                notifications_spaced.append(notification)
 
         notifications_considered = []
         notifications_discarded = []
 
         notifications_considered, notifications_discarded = self.__avalie_notifications(
-            notifications
+            notifications_spaced
         )
 
-        for notification_discarded in notifications_discarded:
+        for notification_discarded in (
+            notifications_discarded + notifications_discarded_by_space
+        ):
             print(
-                f"Notificação descartada: {notification_discarded['notification_date']}"
+                f"[INVESTIGAÇÃO MÚLTIPLA] Notificação de data {notification_discarded['notification_date'].strftime('%d/%m/%Y')} foi descartada."
             )
             self.__discard_notification(notification_discarded["open_payload"])
 
         if len(notifications_considered) > 1:
-            result = self.investigate_multiple(
+            self.investigate_multiple(
                 patient_data, [n["open_payload"] for n in notifications_considered]
             )
-            done_data.extend(result or [])
         elif len(notifications_considered) == 1:
-            result = self.investigate(
+            self.investigate(
                 patient_data, next(iter(notifications_considered))["open_payload"]
             )
-            done_data.append(result)
         else:
-            self.logger.error(
-                f"INVESTIGATOR.investigate_multiple: Matrix: {patient_data} | {notifications}"
+            self.reporter.error(
+                "Matrix Error, chama o desenvolvedor",
+                f"paciente: {patient_data};\n\nnotificações: {notifications}",
             )
-            print("Nenhuma notificação encontrada. [Matrix Error]")
-
-        return done_data
+            print(
+                "[INVESTIGAÇÃO MÚLTIPLA] Nenhuma notificação encontrada. [Matrix Error]"
+            )

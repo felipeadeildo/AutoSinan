@@ -7,6 +7,7 @@ SINAN_BASE_URL = "http://sinan.saude.gov.br"  # protocol http
 
 TODAY = dt.datetime.now()
 """Datetime object for today."""
+TODAY = TODAY.replace(hour=0, minute=0, second=0, microsecond=0)
 
 CURRENT_YEAR_FIRST_DAY = dt.date(year=TODAY.year, month=1, day=1)
 """Date object for the first day of the current year."""
@@ -127,7 +128,6 @@ SEARCH_POSSIBLE_CRITERIAS = Literal[
 SEARCH_POSSIBLE_CRITERIAS_LIST: list[SEARCH_POSSIBLE_CRITERIAS] = [
     "Nome do paciente",
     "Nome da mãe",
-    "Número da Notificação",
     "Data de nascimento",
 ]
 """List of possible search criteria for the notification research method."""

@@ -135,7 +135,9 @@ def __create_initial_settings():
         else:
             operation = None
 
-        criterias[criteria] = {"operacao": operation, "deve_usar": use_criteria}
+        criterias[criteria] = {"operacao": operation, "pode_usar": use_criteria}
+
+    criterias["Número da Notificação"] = {"operacao": "Igual", "pode_usar": True}
 
     investigacao = {
         "agravo": agravo,

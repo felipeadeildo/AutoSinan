@@ -1,21 +1,14 @@
-from datetime import datetime
-
 import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
 from core.abstract import Bot
-from core.constants import (
-    EXAMS_GAL_MAP,
-    SCRIPT_GENERATED_PATH,
-    SINAN_BASE_URL,
-    TODAY,
-    USER_AGENT,
-)
-from core.utils import create_logger, valid_tag
+from core.constants import SINAN_BASE_URL, USER_AGENT
+from core.utils import valid_tag
 from investigation.data_loader import SinanGalData
 from investigation.investigator import Investigator
 from investigation.notification_researcher import NotificationResearcher
+from investigation.report import Report
 
 
 class InvestigationBot(Bot):
@@ -29,42 +22,35 @@ class InvestigationBot(Bot):
         self._username = settings["sinan_credentials"]["username"]
         self._password = settings["sinan_credentials"]["password"]
         self._settings = settings
-        self.logger = create_logger("investigação")
+        self.reporter = Report()
 
         self._init_apps()
 
     def __create_data_manager(self):
         """Load data from SINAN and GAL datasets"""
-        self.logger.info("APP_FACTORY: Gerenciador de Dados")
-        self.data = SinanGalData(self.logger)
+        self.data = SinanGalData(self._settings, self.reporter)
         self.data.load()
-        self.logger.info("APP_FACTORY: Gerenciador de Dados criado")
-        # self.data.df.to_excel("base_unificada.xlsx", index=False)
+        self.reporter.generate_reports_filename(self.data.df)
 
     def __create_session(self):
         """Create a session agent that will be used to make requests"""
-        self.logger.info("APP_FACTORY: Sessão de Requisição")
         self.session = requests.session()
         self.session.headers.update({"User-Agent": USER_AGENT})
-        self.logger.info("APP_FACTORY: Sessão de Requisição criada")
 
     def __create_notification_researcher(self):
         """Create a notification searcher that will be used to research notifications given a patient"""
-        self.logger.info("APP_FACTORY: Pesquisador de Notificação")
         agravo = self._settings["sinan_investigacao"]["agravo"]
         criterios = self._settings["sinan_investigacao"]["criterios"]
-        self.researcher = NotificationResearcher(self.session, agravo, criterios, self.logger)
-        self.logger.info("APP_FACTORY: Pesquisador de Notificação criado")
+        self.researcher = NotificationResearcher(
+            self.session, agravo, criterios, self.reporter
+        )
 
     def __create_investigator(self):
         """Create an Investigator that will be used to investigate (fill data)"""
-        self.logger.info("APP_FACTORY: Investigador")
-        self.investigator = Investigator(self.session, self.logger)
-        self.logger.info("APP_FACTORY: Investigador criado")
+        self.investigator = Investigator(self.session, self.reporter)
 
     def _init_apps(self):
         """Factory method to initialize the apps"""
-        self.logger.info("Iniciando aplicativos")
         initializators = [
             self.__create_session,
             self.__create_notification_researcher,
@@ -75,8 +61,6 @@ class InvestigationBot(Bot):
         for fn in initializators:
             fn()
 
-        self.logger.info("Aplicativos iniciados")
-
     def __verify_login(self, res: requests.Response):
         """Verify if the login was successful
 
@@ -85,11 +69,8 @@ class InvestigationBot(Bot):
         """
         soup = BeautifulSoup(res.content, "html.parser")
         if not soup.find("div", {"id": "detalheUsuario"}):
-            self.logger.error("LOGIN: Falha na autenticação.")
-            print("Falha no Login")
+            print("[SINAN] Falha au tentar logar. Verique as credenciais.")
             exit(1)
-
-        self.logger.info("LOGIN: Autenticação concluída.")
 
         # update the apps that use the session
         need_session = [self.researcher, self.investigator]
@@ -98,8 +79,7 @@ class InvestigationBot(Bot):
 
     def _login(self):
         """Login to the Sinan Website"""
-        self.logger.info("LOGIN: Logando no SINAN")
-        print("Logando no SINAN...")
+        print("[SINAN] Fazendo login utilizando as credenciais fornecidas...")
 
         # set JSESSIONID
         res = self.session.get(f"{SINAN_BASE_URL}/sinan/login/login.jsf")
@@ -107,7 +87,9 @@ class InvestigationBot(Bot):
         soup = BeautifulSoup(res.content, "html.parser")
         form = valid_tag(soup.find("form"))
         if not form:
-            print("Login Form not found.")
+            print(
+                "[SINAN] Erro: Nenhum formulário encontrado. (pode ser que o site tenha atualizado)"
+            )
             exit(1)
 
         inputs = form.find_all("input")
@@ -126,51 +108,44 @@ class InvestigationBot(Bot):
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         self.__verify_login(res)
-        print("Logado com sucesso.")
+        print("[SINAN] Login efetuado com sucesso!")
 
-    def __fill_form(self, patient: pd.Series):
+    def __fill_form(self, patient: dict):
         """Fill out the form with the patient data
 
         Args:
             patient (dict): The patient data
         """
-        print(f"Preenchendo investigação do paciente {patient['Paciente']}...")
-        sinan_response = self.researcher.search(patient.to_dict())
+        sinan_response = self.researcher.search(patient)
         open_payloads = [r["open_payload"] for r in sinan_response]
-        done_data = []
+
+        self.reporter.set_patient(patient)
         match len(sinan_response):
             case 0:
-                self.logger.warning(
-                    f"FILL_FORM: Nenhum resultado encontrado para {patient['Paciente']}."
+                print(
+                    f"[SINAN] Nenhum resultado encontrado para {patient['Paciente']}. Ignorado."
                 )
-                print("Nenhum resultado encontrado para este paciente.")
+                self.reporter.warn("Paciente ignorado por naõ ter nenhum resultado")
             case 1:
+                print(
+                    f"[SINAN] Preechendo investigação do resultado encontrado para {patient['Paciente']}."
+                )
                 open_payload = next(iter(open_payloads))
-                result = self.investigator.investigate(patient.to_dict(), open_payload)
-                done_data.append(result)
+                self.investigator.investigate(patient, open_payload)
             case _:
-                self.logger.warning(
-                    f"FILL_FORM: Multiplos resultados encontrados para {patient['Paciente']}."
+                print(
+                    f"[SINAN] Múltiplos resultados encontrados para {patient['Paciente']}."
                 )
-                result = self.investigator.investigate_multiple(
-                    patient.to_dict(), open_payloads
-                )
-                done_data.extend(result or [])
-
-        return done_data
+                self.reporter.warn("Paciente tem mais de 1 resultado.")
+                self.investigator.investigate_multiple(patient, open_payloads)
 
     def start(self):
-        self.logger.info("INICIANDO INVESTIGACAO")
         self._login()
-        progress_data = []
-        release_date = datetime.strptime(
-            input("Data de liberação (dd/mm/aaaa): "), "%d/%m/%Y"
-        )
-        tests = map(lambda e: EXAMS_GAL_MAP[e], self.data.df["Exame"].unique())
-        run_datetime = TODAY.strftime("%d.%m.%Y %H-%M")
-        log_filename = f"Investigação ({', '.join(tests)}) - liberação {release_date.strftime('%d.%m.%Y %H-%M')} - ({run_datetime}).xlsx"
-        for _, patient in self.data.df.iterrows():
-            done_data = self.__fill_form(patient)
-            progress_data.extend(done_data)
-            df = pd.DataFrame(progress_data)
-            df.to_excel(SCRIPT_GENERATED_PATH / log_filename, index=False)
+        total = len(self.data.df)
+        for i, patient in self.data.df.iterrows():
+            i += 1  # type: ignore [fé]
+            print(
+                f"\n[SINAN] [{i} de {total}] Preenchendo investigação do paciente {patient['Paciente']}..."
+            )
+            self.__fill_form(patient.to_dict())
+            print("\n" + "*" * 25, end="\n")

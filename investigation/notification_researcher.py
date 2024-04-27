@@ -1,10 +1,11 @@
-import logging
+import time
 
 import requests
 from bs4 import BeautifulSoup
 
 from core.constants import POSSIBLE_AGRAVOS, SEARCH_POSSIBLE_CRITERIAS, SINAN_BASE_URL
 from core.utils import generate_search_base_payload, valid_tag
+from investigation.report import Report
 
 
 class Criterias:
@@ -14,12 +15,12 @@ class Criterias:
         self,
         session: requests.Session,
         criterias: dict,
-        logger: logging.Logger,
+        reporter: Report,
         endpoint: str,
         base_payload: dict,
     ):
         self.session = session
-        self.logger = logger
+        self.reporter = reporter
         self.base_payload = base_payload
         self.endpoint = endpoint
         self.criterias = criterias
@@ -49,7 +50,6 @@ class Criterias:
                 "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
                 "form:consulta_dsTextoPesquisa": patient_data["Paciente"],
-                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -64,10 +64,9 @@ class Criterias:
         payload = self.base_payload.copy()
         payload.update(
             {
-                "form:consulta.tipoCampo": field_type_id,
+                "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
                 "form:consulta_dsTextoPesquisa": patient_data["Núm. Notificação Sinan"],
-                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -81,10 +80,11 @@ class Criterias:
         payload = self.base_payload.copy()
         payload.update(
             {
-                "form:consulta.tipoCampo": field_type_id,
+                "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
-                "form:consulta_dsTextoPesquisa": patient_data["Data de Nascimento"],
-                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
+                "form:consulta_dsTextoPesquisa": patient_data[
+                    "Data de Nascimento"
+                ].strftime("%d/%m/%Y"),
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -99,10 +99,9 @@ class Criterias:
         payload = self.base_payload.copy()
         payload.update(
             {
-                "form:consulta.tipoCampo": field_type_id,
+                "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
                 "form:consulta_dsTextoPesquisa": patient_data["Nome da Mãe"],
-                "form:consulta_municipio_uf_id": "0",  # Exemplos que tive isso sempre estava desabilitado.
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -129,8 +128,7 @@ class Criterias:
         )
 
         if not field_type:
-            self.logger.error(f"Criteria {criteria} not found.")
-            print(f"Criteria {criteria} not found.")
+            print(f"Critério fornecido ({criteria}) não foi encontrado.")
             exit(1)
 
         field_type_value = field_type.get("value")
@@ -194,18 +192,12 @@ class NotificationResearcher(Criterias):
         session: requests.Session,
         agravo: POSSIBLE_AGRAVOS,
         criterias: dict,
-        logger: logging.Logger,
+        reporter: Report,
     ):
-        endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
         base_payload = generate_search_base_payload(agravo)
+        endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
 
-        super().__init__(
-            session,
-            criterias,
-            logger,
-            endpoint,
-            base_payload,
-        )
+        super().__init__(session, criterias, reporter, endpoint, base_payload)
 
     def __select_agravo(self):
         """Send the payload to select the agravo"""
@@ -231,6 +223,8 @@ class NotificationResearcher(Criterias):
             }
         )
         res = self.session.post(self.endpoint, data=payload)
+        with open("response.html", "w") as f:
+            f.write(res.text)
         return res
 
     def __define_javax_faces(self):
@@ -241,8 +235,7 @@ class NotificationResearcher(Criterias):
             self.soup.find("input", {"name": "javax.faces.ViewState"})
         )
         if not javax_faces:
-            self.logger.error("Java Faces not found.")
-            print("Java Faces not found.")
+            print("[PESQUISA] Erro: Token de estado de visualização não encontrado.")
             exit(1)
 
         self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
@@ -257,10 +250,9 @@ class NotificationResearcher(Criterias):
             List[dict]: A list of dicts with the results and each dict has the key
                 `open_payload` with the payload to open the patient's investigation page
         """
-        self.logger.info(
-            "NOTIFICATION_RESEARCHER: Pesquisando pelo paciente: %s",
-            patient["Paciente"],
-        )
+        start_time = time.time()
+        self.reporter.set_patient(patient)
+        print(f"[PESQUISA] Pesquisando pelo paciente {patient['Paciente']}")
         self.paciente = patient
         self.__define_javax_faces()
         self.__select_agravo()
@@ -273,26 +265,37 @@ class NotificationResearcher(Criterias):
                 [
                     k
                     for k in self.criterias.keys()
-                    if k != "Número da Notificação" and self.criterias[k]["deve_usar"]
+                    if self.criterias[k]["pode_usar"] and k != "Número da Notificação"
                 ]
+            )
+            self.reporter.debug(
+                f"Pesquisa utilizando os critérios {'; '.join(criterias)}"
             )
 
         for criteria in criterias:
             self.add_criteria(criteria, patient)
 
         results = self.treat_results(self.__search())
+        results_count = len(results)
 
-        if len(results) == 0:
-            self.logger.warning(
-                f"NOTIFICATION_RESEARCHER: Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient['Paciente']}. Pesquisando pelo número de notificação agora."
+        if results_count == 0:
+            print(
+                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient['Paciente']}. Pesquisando pelo número de notificação agora."
+            )
+            self.reporter.warn(
+                "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
             )
             return self.search(patient, use_notification_number=True)
 
-        self.logger.info(
-            "NOTIFICATION_RESEARCHER: Paciente pesquisado (%s) teve %d notificações encontradas no Sinan Online",
-            patient["Paciente"],
-            len(results),
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+        print(
+            f"[PESQUISA] Paciente pesquisado ({patient['Paciente']}) teve {results_count} notificações encontradas no Sinan Online em {elapsed_time:.2f} segundos.",
         )
+        self.reporter.debug(
+            f"{results_count} notificações encontradas no Sinan Online. Tempo de pesquisa: {elapsed_time:.2f} segundos."
+        )
+        self.reporter.clean_patient()
         return results
 
     def treat_results(self, res: requests.Response) -> list[dict]:
@@ -331,5 +334,4 @@ class NotificationResearcher(Criterias):
             value.update(open_payload=payload)
             values.append(value)
 
-        return values
         return values

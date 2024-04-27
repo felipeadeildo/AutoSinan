@@ -1,11 +1,12 @@
-import logging
 import os
+import time
 from pathlib import Path
 
 import pandas as pd
 
 from core.constants import DATA_FOLDER, EXAMS_GAL_MAP
 from core.utils import clear_screen, load_data, normalize_columns, to_datetime
+from investigation.report import Report
 
 
 class SinanGalData:
@@ -13,8 +14,10 @@ class SinanGalData:
 
     df: pd.DataFrame
 
-    def __init__(self, logger: logging.Logger):
-        self.logger = logger
+    def __init__(self, settings: dict, reporter: Report):
+        self.settings = settings
+        self.reporter = reporter
+
         self.__datafolder = Path(DATA_FOLDER)
         if not self.__datafolder.exists():
             self.__datafolder.mkdir()
@@ -26,9 +29,8 @@ class SinanGalData:
         selecteds = []
         datasets = os.listdir(self.__datafolder)
         if len(datasets) == 0:
-            print(
-                f"Nenhum arquivo encontrado dentro de '{self.__datafolder}'. Por favor adicione pelo menos um arquivo de dados."
-            )
+            print(f"[DADOS] Nenhum arquivo encontrado dentro de '{self.__datafolder}'.")
+            print("[DADOS] Por favor adicione pelo menos um arquivo de dados.")
             exit(1)
 
         while True:
@@ -42,7 +44,7 @@ class SinanGalData:
                     break
                 choice = int(choice)
             except ValueError:
-                print("Escolha inválida. Por favor, tente novamente.")
+                print("[DADOS] Escolha inválida. Por favor, tente novamente.")
                 continue
             else:
                 if 1 <= choice <= len(datasets):
@@ -50,15 +52,17 @@ class SinanGalData:
                     selecteds.append(selected)
                     datasets.pop(choice - 1)
                     clear_screen()
-                    print(f"Datasets selecionados: {'; '.join(selecteds)}")
+                    print(
+                        f"[DADOS] Bases de dados selecionadas: {'; '.join(selecteds)}"
+                    )
                 else:
-                    print("Escolha inválida. Por favor, tente novamente.")
+                    print("[DADOS] Escolha inválida. Por favor, tente novamente.")
                     continue
             if not datasets:
                 break
 
         if not selecteds:
-            print("Nenhum dataset selecionado.")
+            print("[DADOS] Nenhuma base de dados foi selecionada.")
             exit(0)
 
         return selecteds
@@ -68,6 +72,7 @@ class SinanGalData:
         Get a dataframe by concatenating selected datasets.
         """
         selecteds = self.__choice_datasets()
+        self.reporter.debug(f"Bases do GAL Selecionadas: {'; '.join(selecteds)}")
 
         dfs = [
             load_data(
@@ -88,8 +93,11 @@ class SinanGalData:
         Raise:
             Exception: If the merged dataframe is not defined yet.
         """
-        self.logger.info("EXAM_FILTERS: Filtrando exames")
-        print("Filtrando pacientes que irão ser usados para alimentar o SINAN...")
+        start_time = time.time()
+        patients_after_filter = len(self.df)
+        print(
+            "[DADOS] Filtrando exames de pacientes que podem ir para a investigação (Filtro Oportuno)."
+        )
 
         rules = {
             "IgM": lambda time: time + pd.Timedelta(days=1) >= pd.Timedelta(days=6),
@@ -97,13 +105,13 @@ class SinanGalData:
             "PCR": lambda time: time <= pd.Timedelta(days=5),
         }
 
-        self.logger.info(f"EXAM_FILTERS: Tipos de Exames: {rules.keys()}")
-
         def filter_content(row: pd.Series) -> bool:
+            self.reporter.set_patient(row.to_dict())
             exam_type = EXAMS_GAL_MAP.get(row["Exame"])
             if not exam_type:
-                print(
-                    f"Tipo de examme \"{row['Exame']}\" é desconhecido. Removendo paciente."
+                self.reporter.error(
+                    f"O bot não conhece o tipo de exame {row['Exame']}",
+                    observation="Paciente removido do procedimento do bot.",
                 )
                 return False
 
@@ -112,55 +120,66 @@ class SinanGalData:
 
             result = rule(elapsed_time)
             if result:
-                self.logger.info(
-                    f"EXAM_FILTERS: SUCESSO: Exame {row['Paciente']} ({row['Exame']}) tem {elapsed_time.days} dias"
+                self.reporter.debug(
+                    "Pode ir para a investigação no Sinan segundo o filtro oportuno.",
+                    observation=f"Diferença entre data da coleta e data do 1º sintoma é de {elapsed_time.days} dias.",
                 )
             else:
-                self.logger.info(
-                    f"EXAM_FILTERS: FALHA: Exame {row['Paciente']} ({row['Exame']}) tem {elapsed_time.days} dias"
+                self.reporter.debug(
+                    "Não pode ir para a investigação no Sinan segundo o filtro oportuno.",
+                    observation=f"Diferença entre data da coleta e data do 1º sintoma é de {elapsed_time.days} dias.",
                 )
 
             return result
 
         self.df = self.df[self.df.apply(filter_content, axis=1, result_type="reduce")]
-        print(f"Total de pacientes hábeis para irem para o SINAN: {len(self.df)}")
+
+        end_time = time.time()
+
+        self.reporter.clean_patient()
+        elapsed_time = end_time - start_time
+        self.reporter.debug(
+            f"Filtro oportuno concluído em {elapsed_time:.2f} segundos.",
+            observation=f"Total de pacientes hábeis para investigação no Sinan: {len(self.df)} de {patients_after_filter}.",
+        )
+
+        print(
+            f"[DADOS] Filtro oportuno concluído em {elapsed_time:.2f} segundos com {len(self.df)} de {patients_after_filter} exames."
+        )
 
     def clean_data(self):
         """
         Method to clean the data. It logs the start of the cleaning process, loads the data, logs the successful data load, and then iterates through a list of cleaning functions to clean the data.
         """
-        self.logger.info("CLEAN_DATA: Limpando dados")
-        print("Iniciando a limpeza dos dados...")
-
         cleaners = [
             self.__exam_filters,
         ]
         for fn in cleaners:
             fn()
 
-        self.logger.info("CLEAN_DATA: Dados limpos")
-        print("Limpeza concluída.")
-
     def load(self):
         """
         Load method to load and preprocess GAL and SINAN datasets.
         """
         # GAL
-        self.logger.info("DATA_LOADER: Obtendo o dataset do GAL")
-        print("Escolha o dataset do GAL para usar...")
+        print("[DADOS] Escolha os datasets do GAL a serem carregados:")
         self.df = self.__get_df()
-        self.logger.info("DATA_LOADER:Dataset do GAL obtido")
 
+        start_date = time.time()
         to_normalize = ["Paciente", "Nome da Mãe"]
-        self.logger.info(f"DATA_LOADER: Normalizando colunas: {to_normalize}")
         normalize_columns(self.df, to_normalize)
-        self.logger.info("Colunas normalizadas")
+        self.reporter.debug(f"Colunas da base do GAL normalizadas: {to_normalize}")
 
         to_setdatetime = ["Data de Nascimento", "Data do 1º Sintomas", "Data da Coleta"]
-        self.logger.info(
-            f"DATA_LOADER: Convertendo colunas para datetime: {to_setdatetime}"
-        )
         to_datetime(self.df, to_setdatetime, format="%d-%m-%Y")
-        self.logger.info("DATA_LOADER: Colunas convertidas para datetime")
+        self.reporter.debug(
+            f"Colunas da base do GAL convertidas para datetime: {to_setdatetime}"
+        )
 
         self.clean_data()
+        end_date = time.time()
+        elapsed_time = end_date - start_date
+
+        print(
+            f"[DADOS] Datasets do GAL carregados, normalizados e filtrados em {elapsed_time:.2f} segundos."
+        )
