@@ -5,8 +5,8 @@ import pandas as pd
 from core.constants import (
     EXAM_VALUE_COL_MAP,
     EXAMS_GAL_MAP,
+    EXECUTION_DATE,
     SCRIPT_GENERATED_PATH,
-    TODAY,
 )
 
 
@@ -78,7 +78,7 @@ class Report:
             input("[DADOS] Data de liberação (dd/mm/aaaa): "), "%d/%m/%Y"
         )
         exams = ", ".join(map(lambda e: EXAMS_GAL_MAP[e], data["Exame"].unique()))
-        run_datetime = TODAY.strftime("%d.%m.%Y %H-%M")
+        run_datetime = EXECUTION_DATE.strftime("%d.%m.%Y %H-%M")
         self.__reports_filename = f"Investigação ({exams}) - liberação {release_date.strftime('%d.%m.%Y')} - execução {run_datetime}.xlsx"
         self.__export()
 

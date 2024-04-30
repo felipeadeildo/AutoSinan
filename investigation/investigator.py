@@ -16,6 +16,7 @@ from core.constants import (
     PRIORITY_CLASSIFICATION_MAP,
     SINAN_BASE_URL,
     TODAY,
+    TODAY_FORMATTED,
     NotificationType,
 )
 from core.utils import valid_tag
@@ -376,7 +377,7 @@ class Investigator:
         if date_considered:
             date_site = datetime.strptime(date_considered, "%d/%m/%Y")
             if date_site < self.patient_data["Data da Coleta"]:
-                date_considered = TODAY.strftime("%d/%m/%Y")
+                date_considered = TODAY_FORMATTED
                 self.reporter.warn(
                     f"Data de encerramento do site ({date_site}) é menor que a data da coleta ({self.patient_data['Data da Coleta'].strftime('%d/%m/%Y')}). Portanto será utilizada a data de hoje ({date_considered}) para o encerramento."
                 )
@@ -389,7 +390,7 @@ class Investigator:
             )
             return
         else:
-            date_considered = TODAY.strftime("%d/%m/%Y")
+            date_considered = TODAY_FORMATTED
 
         self.current_form.update(
             {"form:dengue_dataEncerramentoInputDate": date_considered}
@@ -403,7 +404,7 @@ class Investigator:
     def __define_investigation_date(self):
         """Define the investigation date (31 - Data da Investigação)"""
         print("[PRRENCHIMENTO] Tentando definir 31 - Data da Investigação.", end=" ")
-        today_formatted = TODAY.strftime("%d/%m/%Y")
+        today_formatted = TODAY_FORMATTED
         closing_date_formatted = self.current_form[
             "form:dengue_dataEncerramentoInputDate"
         ]

@@ -5,13 +5,20 @@ from typing import Literal, Mapping, TypedDict
 SINAN_BASE_URL = "http://sinan.saude.gov.br"  # protocol http
 """Base url for Sinan Website."""
 
-TODAY = dt.datetime.now()
-"""Datetime object for today."""
-TODAY = TODAY.replace(hour=0, minute=0, second=0, microsecond=0)
+EXECUTION_DATE = dt.datetime.now()
+"""Datetime object for the execution date and time."""
+
+TODAY = EXECUTION_DATE.replace(hour=0, minute=0, second=0, microsecond=0)
+"""Datetime object for today at midnight."""
+
+TODAY_FORMATTED = TODAY.strftime("%d/%m/%Y")
+"""Formatted date string for today. (dd/mm/yyyy)"""
+
+TODAY_MONTH_FORMATTED = TODAY.strftime("%m/%Y")
+"""Formatted date string for today. (mm/yyyy)"""
 
 CURRENT_YEAR_FIRST_DAY = dt.date(year=TODAY.year, month=1, day=1)
 """Date object for the first day of the current year."""
-
 
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) "

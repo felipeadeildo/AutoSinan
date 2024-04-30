@@ -1,4 +1,3 @@
-import logging
 import os
 import re
 from pathlib import Path
@@ -9,17 +8,16 @@ import requests
 import toml
 from bs4 import NavigableString, Tag
 from dbfread import DBF
-from icecream import ic
 
 from .constants import (
     CRITERIA_OPERATIONS,
     CURRENT_YEAR_FIRST_DAY,
     POSSIBLE_AGRAVOS,
     POSSIBLE_AGRAVOS_LIST,
-    SCRIPT_GENERATED_PATH,
     SEARCH_POSSIBLE_CRITERIAS_LIST,
     SETTINGS_FILE,
-    TODAY,
+    TODAY_FORMATTED,
+    TODAY_MONTH_FORMATTED,
 )
 
 
@@ -185,27 +183,6 @@ def copy_session(session: requests.Session):
     return session_copy
 
 
-def create_logger(name: str):
-    """Create a logger with the given name
-
-    Args:
-        name (str): Logger name
-
-    Returns:
-        logging.Logger: Logger
-    """
-    logger = logging.getLogger(name)
-    fmter = logging.Formatter("[%(asctime)s] %(levelname)s: %(message)s")
-    handler = logging.FileHandler(
-        SCRIPT_GENERATED_PATH / f"{name}_{TODAY.strftime('%Y%m%d_%H%M%S')}.log"
-    )
-    handler.setFormatter(fmter)
-    logger.addHandler(handler)
-    logger.setLevel(logging.DEBUG)
-    ic.configureOutput(includeContext=True)
-    return logger
-
-
 def generate_search_base_payload(agravo: POSSIBLE_AGRAVOS):
     """Generate base payload for Notification Researcher
 
@@ -222,9 +199,9 @@ def generate_search_base_payload(agravo: POSSIBLE_AGRAVOS):
         "form:consulta_dataInicialInputDate": CURRENT_YEAR_FIRST_DAY.strftime(
             "%d/%m/%Y"
         ),
-        "form:consulta_dataInicialInputCurrentDate": TODAY.strftime("%m/%Y"),
-        "form:consulta_dataFinalInputDate": TODAY.strftime("%d/%m/%Y"),
-        "form:consulta_dataFinalInputCurrentDate": TODAY.strftime("%m/%Y"),
+        "form:consulta_dataInicialInputCurrentDate": TODAY_MONTH_FORMATTED,
+        "form:consulta_dataFinalInputDate": TODAY_FORMATTED,
+        "form:consulta_dataFinalInputCurrentDate": TODAY_MONTH_FORMATTED,
         "form:richagravocomboboxField": agravo,
         "form:richagravo": agravo,
         "form:tipoUf": "3",  # Notificação ou Residência
