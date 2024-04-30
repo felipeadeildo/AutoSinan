@@ -1,4 +1,3 @@
-import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
@@ -125,7 +124,7 @@ class InvestigationBot(Bot):
                 print(
                     f"[SINAN] Nenhum resultado encontrado para {patient['Paciente']}. Ignorado."
                 )
-                self.reporter.warn("Paciente ignorado por naõ ter nenhum resultado")
+                self.reporter.warn("Paciente ignorado por não ter nenhum resultado")
             case 1:
                 print(
                     f"[SINAN] Preechendo investigação do resultado encontrado para {patient['Paciente']}."

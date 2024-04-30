@@ -269,7 +269,7 @@ class NotificationResearcher(Criterias):
                 ]
             )
             self.reporter.debug(
-                f"Pesquisa utilizando os critérios {'; '.join(criterias)}"
+                f"Pesquisando utilizando os critérios: {'; '.join(criterias)}"
             )
 
         for criteria in criterias:
@@ -278,7 +278,7 @@ class NotificationResearcher(Criterias):
         results = self.treat_results(self.__search())
         results_count = len(results)
 
-        if results_count == 0:
+        if results_count == 0 and not use_notification_number:
             print(
                 f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient['Paciente']}. Pesquisando pelo número de notificação agora."
             )
