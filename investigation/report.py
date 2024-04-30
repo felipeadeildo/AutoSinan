@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 import pandas as pd
 
@@ -22,9 +23,9 @@ class Report:
             "Tipo de Exame",
             "Resultado do Exame",
             "Mensagem",
-            "Importância da Mensagem",
+            "Categoria da Mensagem",
             "Observações",
-            "Data e Hora",
+            "Data e Hora da Mensagem",
         ]
         self.df = pd.DataFrame(columns=self.columns)
         self.df = self.df[self.columns]
@@ -32,13 +33,17 @@ class Report:
         # TODO: Add a chunk cleaner for this message stack and save the indice of the last chunk in self.df
         self.__messages_stack = []
         self.__current_patient = {}
-        self.__importance_map = [
-            "Informação Simples",
-            "Informação de Progresso",
-            "Aviso (Atenção)",
-            "Erro",
-        ]
+
+        self.__importance_map = {
+            "debug": "Informação Simples",
+            "info": "Informação de Progresso",
+            "warn": "Aviso (Atenção)",
+            "error": "Erro",
+        }
         self.__reports_filename = None
+
+        # TODO: Implements a serie os stats using this controller that will be to generate a lot of stats on the end of the investigation
+        self.stats = {}
 
     def set_patient(self, patient: dict):
         """Set the current patient that the report will be about
@@ -82,7 +87,12 @@ class Report:
         self.__reports_filename = f"Investigação ({exams}) - liberação {release_date.strftime('%d.%m.%Y')} - execução {run_datetime}.xlsx"
         self.__export()
 
-    def __add_message(self, message: str, importance: int = 0, observation: str = ""):
+    def __add_message(
+        self,
+        message: str,
+        importance: Literal["debug", "info", "warn", "error"],
+        observation: str = "",
+    ):
         """Low level function to add a message to the report
 
         Args:
@@ -99,9 +109,9 @@ class Report:
         row.update(
             {
                 "Mensagem": message,
-                "Importância da Mensagem": self.__importance_map[importance],
+                "Categoria da Mensagem": self.__importance_map[importance],
                 "Observações": observation.strip(),
-                "Data e Hora": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+                "Data e Hora da Mensagem": datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
             }
         )
 
@@ -117,7 +127,7 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
-        self.__add_message(message, 0, observation)
+        self.__add_message(message, "debug", observation)
 
     def info(self, message: str, observation: str = ""):
         """Add an info message (Importance: Informação de Progresso)
@@ -126,7 +136,7 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
-        self.__add_message(message, 0, observation)
+        self.__add_message(message, "info", observation)
 
     def warn(self, message: str, observation: str = ""):
         """Add a warning message (Importance: Aviso (Atenção))
@@ -135,7 +145,7 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
-        self.__add_message(message, 1, observation)
+        self.__add_message(message, "warn", observation)
 
     def error(self, message: str, observation: str = ""):
         """Add an error message (Importance: Erro)
@@ -144,4 +154,4 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
-        self.__add_message(message, 3, observation)
+        self.__add_message(message, "error", observation)

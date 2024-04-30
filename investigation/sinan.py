@@ -135,7 +135,7 @@ class InvestigationBot(Bot):
                 print(
                     f"[SINAN] Múltiplos resultados encontrados para {patient['Paciente']}."
                 )
-                self.reporter.warn("Paciente tem mais de 1 resultado.")
+                self.reporter.warn("Paciente tem mais de 1 resultado (duplicidade).")
                 self.investigator.investigate_multiple(patient, open_payloads)
 
     def start(self):
