@@ -821,7 +821,7 @@ class Investigator:
             ).days
             if diff_days < 15:
                 self.reporter.warn(
-                    f"A notificação de data {notification['notification_date'].strftime('%d/%m/%Y')} é muito recente comparada a notificação de data {notifications_spaced[-1]['notification_date'].strftime('%d/%m/%Y')} tendo a diferença de {diff_days} dias. Portanto será descartada."
+                    f"A notificação de data {notification['notification_date'].strftime('%d/%m/%Y')} é muito recente comparada a notificação de data {notifications_spaced[-1]['notification_date'].strftime('%d/%m/%Y')} tendo a diferença de {diff_days} dias. Portanto será excluída."
                 )
                 notifications_discarded_by_space.append(notification)
             else:
@@ -838,7 +838,7 @@ class Investigator:
             notifications_discarded + notifications_discarded_by_space
         ):
             print(
-                f"[INVESTIGAÇÃO MÚLTIPLA] Notificação de data {notification_discarded['notification_date'].strftime('%d/%m/%Y')} foi descartada."
+                f"[INVESTIGAÇÃO MÚLTIPLA] Notificação de data {notification_discarded['notification_date'].strftime('%d/%m/%Y')} foi excluída."
             )
             self.__discard_notification(notification_discarded["open_payload"])
 
