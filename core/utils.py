@@ -104,6 +104,11 @@ def valid_tag(tag: Tag | NavigableString | None) -> Tag | None:
 
 
 def __create_initial_settings():
+    """Create the initial settings (asking for credentials and other data)
+
+    Returns:
+        dict: Configuration document
+    """
     print("Sobre o Sinan Online:")
     credentials = {
         "username": input("Usuário: "),
