@@ -5,7 +5,9 @@ from bs4 import BeautifulSoup
 
 from core.constants import POSSIBLE_AGRAVOS, SEARCH_POSSIBLE_CRITERIAS, SINAN_BASE_URL
 from core.utils import generate_search_base_payload, valid_tag
+from investigation.patient import Patient
 from investigation.report import Report
+from investigation.sheet import Sheet
 
 
 class Criterias:
@@ -40,7 +42,7 @@ class Criterias:
         self.current_criterias.pop(criteria_index)
 
     def __patient_name_criteria(
-        self, patient_data: dict, field_type_id: str, operator: str
+        self, patient: Patient, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient name criteria on search"""
 
@@ -49,7 +51,7 @@ class Criterias:
             {
                 "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
-                "form:consulta_dsTextoPesquisa": patient_data["Paciente"],
+                "form:consulta_dsTextoPesquisa": patient.name,
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -58,7 +60,7 @@ class Criterias:
         self.current_criterias.append("Nome do paciente")
 
     def __patient_notification_criteria(
-        self, patient_data: dict, field_type_id: str, operator: str
+        self, patient: Patient, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient notification number criteria on search"""
         payload = self.base_payload.copy()
@@ -66,7 +68,7 @@ class Criterias:
             {
                 "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
-                "form:consulta_dsTextoPesquisa": patient_data["Núm. Notificação Sinan"],
+                "form:consulta_dsTextoPesquisa": patient.notification_number,
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -74,7 +76,7 @@ class Criterias:
         self.current_criterias.append("Número da Notificação")
 
     def __patient_date_of_birth_criteria(
-        self, patient_data: dict, field_type_id: str, operator: str
+        self, patient: Patient, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient date of birth criteria on search"""
         payload = self.base_payload.copy()
@@ -82,9 +84,7 @@ class Criterias:
             {
                 "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
-                "form:consulta_dsTextoPesquisa": patient_data[
-                    "Data de Nascimento"
-                ].strftime("%d/%m/%Y"),
+                "form:consulta_dsTextoPesquisa": patient.f_birth_date,
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -93,7 +93,7 @@ class Criterias:
         self.current_criterias.append("Data de nascimento")
 
     def __patient_mother_name_criteria(
-        self, patient_data: dict, field_type_id: str, operator: str
+        self, patient: Patient, field_type_id: str, operator: str
     ):
         """Send the payload to select the patient month name criteria on search"""
         payload = self.base_payload.copy()
@@ -101,7 +101,7 @@ class Criterias:
             {
                 "form:consulta_tipoCampo": field_type_id,
                 "form:consulta_operador": operator,
-                "form:consulta_dsTextoPesquisa": patient_data["Nome da Mãe"],
+                "form:consulta_dsTextoPesquisa": patient.mother_name,
                 "form:btnAdicionarCriterio": "form:btnAdicionarCriterio",
             }
         )
@@ -152,7 +152,7 @@ class Criterias:
     def add_criteria(
         self,
         criteria: SEARCH_POSSIBLE_CRITERIAS,
-        patient_data: dict,
+        patient: Patient,
     ):
         """Add a filter criterion
 
@@ -171,7 +171,7 @@ class Criterias:
         operation = self.criterias[criteria]["operacao"]
         operator = operators[operation]
 
-        criterias[criteria](patient_data, field_type_id, operator)
+        criterias[criteria](patient, field_type_id, operator)
 
 
 class NotificationResearcher(Criterias):
@@ -240,20 +240,19 @@ class NotificationResearcher(Criterias):
 
         self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
 
-    def search(self, patient: dict, use_notification_number: bool = False):
+    def search(self, patient: Patient, use_notification_number: bool = False):
         """Search for a patient in the Sinan website (Consultar Notificação)
 
         Args:
-            patient (dict): The patient data from GAL to search
+            patient (Patient): The patient data from GAL to search
 
         Returns:
-            List[dict]: A list of dicts with the results and each dict has the key
-                `open_payload` with the payload to open the patient's investigation page
+            list[Sheet]: A list of results with objects to interact with.
         """
         start_time = time.time()
+        self.patient = patient
         self.reporter.set_patient(patient)
-        print(f"[PESQUISA] Pesquisando pelo paciente {patient['Paciente']}")
-        self.paciente = patient
+        print(f"[PESQUISA] Pesquisando pelo paciente {patient.name}")
         self.__define_javax_faces()
         self.__select_agravo()
 
@@ -275,12 +274,12 @@ class NotificationResearcher(Criterias):
         for criteria in criterias:
             self.add_criteria(criteria, patient)
 
-        results = self.treat_results(self.__search())
+        results = self.__treat_results(self.__search())
         results_count = len(results)
 
         if results_count == 0 and not use_notification_number:
             print(
-                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient['Paciente']}. Pesquisando pelo número de notificação agora."
+                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
             )
             self.reporter.warn(
                 "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
@@ -290,7 +289,7 @@ class NotificationResearcher(Criterias):
         end_time = time.time()
         elapsed_time = end_time - start_time
         print(
-            f"[PESQUISA] Paciente pesquisado ({patient['Paciente']}) teve {results_count} notificações encontradas no Sinan Online em {elapsed_time:.2f} segundos.",
+            f"[PESQUISA] Paciente pesquisado ({patient.name}) teve {results_count} notificações encontradas no Sinan Online em {elapsed_time:.2f} segundos.",
         )
         self.reporter.debug(
             f"{results_count} notificações encontradas no Sinan Online. Tempo de pesquisa: {elapsed_time:.2f} segundos."
@@ -298,14 +297,14 @@ class NotificationResearcher(Criterias):
         self.reporter.clean_patient()
         return results
 
-    def treat_results(self, res: requests.Response) -> list[dict]:
+    def __treat_results(self, res: requests.Response) -> list[Sheet]:
         """This will receive the search response from the sinan website and will return a list of dicts with the results
 
         Args:
             res (requests.Response): The response from the sinan website
 
         Returns:
-            list[dict]: A list of dicts with the results
+            list[Sheet]: A list of dicts with the results
         """
         soup = BeautifulSoup(res.content, "html.parser")
         reult_tag = soup.find("span", {"id": "form:panelResultadoPesquisa"})
@@ -331,7 +330,9 @@ class NotificationResearcher(Criterias):
                 }
             )
 
-            value.update(open_payload=payload)
-            values.append(value)
+            sheet = Sheet(self.session, self.patient, value, payload, self.reporter)
+
+            if sheet.is_oportunity:
+                values.append(sheet)
 
         return values

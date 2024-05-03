@@ -5,8 +5,9 @@ from core.abstract import Bot
 from core.constants import SINAN_BASE_URL, USER_AGENT
 from core.utils import valid_tag
 from investigation.data_loader import SinanGalData
-from investigation.investigator import Investigator
+from investigation.investigator import DuplicateChecker
 from investigation.notification_researcher import NotificationResearcher
+from investigation.patient import Patient
 from investigation.report import Report
 
 
@@ -44,16 +45,16 @@ class InvestigationBot(Bot):
             self.session, agravo, criterios, self.reporter
         )
 
-    def __create_investigator(self):
-        """Create an Investigator that will be used to investigate (fill data)"""
-        self.investigator = Investigator(self.session, self.reporter)
+    def __create_duplicate_checker(self):
+        """Create a duplicate checker instance that will be used to analyze duplicates"""
+        self.duplicate_checker = DuplicateChecker(self.session, self.reporter)
 
     def _init_apps(self):
         """Factory method to initialize the apps"""
         initializators = [
             self.__create_session,
             self.__create_notification_researcher,
-            self.__create_investigator,
+            self.__create_duplicate_checker,
             self.__create_data_manager,
         ]
 
@@ -72,7 +73,7 @@ class InvestigationBot(Bot):
             exit(1)
 
         # update the apps that use the session
-        need_session = [self.researcher, self.investigator]
+        need_session = [self.researcher, self.duplicate_checker]
         for app in need_session:
             setattr(app, "session", self.session)
 
@@ -109,42 +110,40 @@ class InvestigationBot(Bot):
         self.__verify_login(res)
         print("[SINAN] Login efetuado com sucesso!")
 
-    def __fill_form(self, patient: dict):
+    def __fill_form(self, patient: Patient):
         """Fill out the form with the patient data
 
         Args:
-            patient (dict): The patient data
+            patient (Patient): The patient data
         """
-        sinan_response = self.researcher.search(patient)
-        open_payloads = [r["open_payload"] for r in sinan_response]
+        sheets = self.researcher.search(patient)
 
         self.reporter.set_patient(patient)
-        match len(sinan_response):
+        match len(sheets):
             case 0:
                 print(
-                    f"[SINAN] Nenhum resultado encontrado para {patient['Paciente']}. Ignorado."
+                    f"[SINAN] Nenhum resultado encontrado para {patient.name}. Ignorado."
                 )
                 self.reporter.warn("Paciente ignorado por não ter nenhum resultado")
             case 1:
                 print(
-                    f"[SINAN] Preechendo investigação do resultado encontrado para {patient['Paciente']}."
+                    f"[SINAN] Preechendo investigação do resultado encontrado para {patient.name}."
                 )
-                open_payload = next(iter(open_payloads))
-                self.investigator.investigate(patient, open_payload)
+                sheet = next(iter(sheets))
+                sheet.investigate_patient()
             case _:
-                print(
-                    f"[SINAN] Múltiplos resultados encontrados para {patient['Paciente']}."
-                )
+                print(f"[SINAN] Múltiplos resultados encontrados para {patient.name}.")
                 self.reporter.warn("Paciente tem mais de 1 resultado (duplicidade).")
-                self.investigator.investigate_multiple(patient, open_payloads)
+                self.duplicate_checker.investigate_multiple(patient, sheets)
 
     def start(self):
         self._login()
         total = len(self.data.df)
         for i, patient in self.data.df.iterrows():
             i += 1  # type: ignore [fé]
+            patient = Patient(patient.to_dict())
             print(
-                f"\n[SINAN] [{i} de {total}] Preenchendo investigação do paciente {patient['Paciente']}..."
+                f"\n[SINAN] [{i} de {total}] Preenchendo investigação do paciente {patient.name}..."
             )
-            self.__fill_form(patient.to_dict())
+            self.__fill_form(patient)
             print("\n" + "*" * 25, end="\n")

@@ -3,12 +3,8 @@ from typing import Literal
 
 import pandas as pd
 
-from core.constants import (
-    EXAM_VALUE_COL_MAP,
-    EXAMS_GAL_MAP,
-    EXECUTION_DATE,
-    SCRIPT_GENERATED_PATH,
-)
+from core.constants import EXAMS_GAL_MAP, EXECUTION_DATE, SCRIPT_GENERATED_PATH
+from investigation.patient import Patient
 
 
 class Report:
@@ -45,21 +41,20 @@ class Report:
         # TODO: Implements a serie os stats using this controller that will be to generate a lot of stats on the end of the investigation
         self.stats = {}
 
-    def set_patient(self, patient: dict):
+    def set_patient(self, patient: Patient):
         """Set the current patient that the report will be about
 
         Args:
             patient (dict): The patient data from GAL
         """
-        exam_type = EXAMS_GAL_MAP[patient["Exame"]]
-        result_exam_col_name = EXAM_VALUE_COL_MAP[exam_type]
+        exam_type = patient.exam_type
         self.__current_patient = {
-            "Nº de Notificação (GAL)": patient["Núm. Notificação Sinan"],
-            "Nome do Paciente": patient["Paciente"],
-            "Nome da Mãe": patient["Nome da Mãe"],
-            "Data de Nascimento": patient["Data de Nascimento"].strftime("%d/%m/%Y"),
+            "Nº de Notificação (GAL)": patient.notification_number,
+            "Nome do Paciente": patient.name,
+            "Nome da Mãe": patient.mother_name,
+            "Data de Nascimento": patient.f_birth_date,
             "Tipo de Exame": exam_type,
-            "Resultado do Exame": patient[result_exam_col_name],
+            "Resultado do Exame": patient.exam_result,
         }
 
     def clean_patient(self):
@@ -79,12 +74,13 @@ class Report:
         Args:
             data (pd.DataFrame): The GAL database
         """
-        release_date = datetime.strptime(
-            input("[DADOS] Data de liberação (dd/mm/aaaa): "), "%d/%m/%Y"
+        release_dates = ", ".join(
+            map(lambda d: d.strftime("%d.%m.%Y"), data["Data da Liberação"].unique())
         )
         exams = ", ".join(map(lambda e: EXAMS_GAL_MAP[e], data["Exame"].unique()))
-        run_datetime = EXECUTION_DATE.strftime("%d.%m.%Y %H-%M")
-        self.__reports_filename = f"Investigação ({exams}) - liberação {release_date.strftime('%d.%m.%Y')} - execução {run_datetime}.xlsx"
+        run_datetime = EXECUTION_DATE.strftime("%d.%m.%Y às %Hh%M")
+        self.__reports_filename = f"Investigação ({exams}) - liberação {release_dates} - execução {run_datetime}.xlsx"
+        print(f"[RELATORIO] Nome do relatório: {self.__reports_filename}")
         self.__export()
 
     def __add_message(

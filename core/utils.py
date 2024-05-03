@@ -1,12 +1,12 @@
 import os
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import pandas as pd
 import requests
 import toml
-from bs4 import NavigableString, Tag
+from bs4 import BeautifulSoup, NavigableString, Tag
 from dbfread import DBF
 
 from .constants import (
@@ -214,4 +214,54 @@ def generate_search_base_payload(agravo: POSSIBLE_AGRAVOS):
         "form:tipoSaida": "2",  # Lista de Notificação
         "form:consulta_tipoCampo": "0",
         "form:consulta_municipio_uf_id": "0",
+    }
+
+
+def get_form_data(
+    soup: BeautifulSoup, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}
+) -> dict:
+    """Return the default values of the form fields
+
+    Args:
+        tag_name (str, optional): BeautifulSoup tag name. Defaults to `None`.
+        attrs (dict, optional): BeautifulSoup tag attributes. Defaults to `{"id": "form"}`
+            Example: `attrs={"id": "form:j_id"}`
+
+    Returns:
+        dict: A dictionary with the form default data
+    """
+    form = valid_tag(soup.find(tag_name, attrs=attrs))
+
+    if not form:
+        raise Exception(f"Formulário <{tag_name} {attrs} /> não encontrado.")
+
+    def get_value(input_tag):
+        input_type = input_tag.get("type", "text")
+        if input_type == "checkbox":
+            checked = input_tag.get("checked", "")
+            return "on" if checked else ""
+        return input_tag.get("value", "")
+
+    # for each input, get the name and value
+    inputs = {i.get("name", ""): get_value(i) for i in form.find_all("input")}
+
+    # for each select, get the name and selected option
+    selects = {
+        s.get("name", ""): next(
+            (
+                opt.get("value")
+                for opt in s.find_all("option")
+                if opt.get("selected") == "selected"
+            ),
+            "",
+        )
+        for s in form.find_all("select")
+    }
+
+    data = {**inputs, **selects}
+
+    return {
+        k: v
+        for k, v in data.items()
+        if k and not k.startswith(("form:j_id", "form:btn", "form:botao"))
     }
