@@ -115,11 +115,14 @@ def __create_initial_settings():
         "password": input("Senha: "),
     }
 
-    print("Sobre as Investigações: ")
+    clear_screen()
+
     print("Escolha qual agravo será utilizado:")
     for i, agravo in enumerate(POSSIBLE_AGRAVOS_LIST, 1):
         print(f"\t{i} - {agravo}")
     agravo = POSSIBLE_AGRAVOS_LIST[int(input("Agravo: ")) - 1]
+
+    clear_screen()
 
     print(
         "Sobre os critérios de pesquisa de paciente escolha quais devem ser utilizados e suas operações:"
@@ -127,18 +130,20 @@ def __create_initial_settings():
     criterias = {}
     for criteria in SEARCH_POSSIBLE_CRITERIAS_LIST:
         use_criteria = (
-            input(f"O bot pode usar o critério '{criteria}'? (s/n): ").lower() == "s"
+            input(f"\tO bot pode usar o critério '{criteria}'? (s/n): ").lower() == "s"
         )
         if use_criteria:
             possible_operations = CRITERIA_OPERATIONS[criteria]
-            print("\tEscolha qual operação deve ser realizada para o critério:")
+            print("\t\tEscolha qual operação deve ser realizada para o critério:")
             for i, operation in enumerate(possible_operations, 1):
-                print(f"\t{i} - {operation}")
-            operation = possible_operations[int(input("Operação: ")) - 1]
+                print(f"\t\t\t{i} - {operation}")
+            operation = possible_operations[int(input("\t\tOperação: ")) - 1]
         else:
             operation = None
 
         criterias[criteria] = {"operacao": operation, "pode_usar": use_criteria}
+
+    clear_screen()
 
     criterias["Número da Notificação"] = {"operacao": "Igual", "pode_usar": True}
 
