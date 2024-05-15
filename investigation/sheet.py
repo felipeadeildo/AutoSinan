@@ -3,7 +3,6 @@ from datetime import datetime, timedelta
 from typing import Literal, Mapping
 
 from bs4 import BeautifulSoup
-
 from requests import Session
 
 from core.constants import (
@@ -32,12 +31,14 @@ class Properties:
 
     @property
     def first_symptoms_date(self) -> datetime:
+        """Date of the first symptoms (object)"""
         return datetime.strptime(
             self.notification_form_data["form:dtPrimeirosSintomasInputDate"], "%d/%m/%Y"
         )
 
     @property
     def f_first_symptoms_date(self) -> str:
+        """Formatted date of the first symptoms (dd/mm/YYYY)"""
         return self.first_symptoms_date.strftime("%d/%m/%Y")
 
     @property
@@ -348,7 +349,7 @@ class Sheet(Properties):
         if not self.patient.exam_type or self.patient.exam_type not in rules:
             self.reporter.error(
                 f"Ao tentar verificar oportunidade do paciente, o bot encontrou um tipo de exame inválido: {self.patient.exam_type}.",
-                "Oportunidade definida como Falso.",
+                "Oportunidade definida como Falsa.",
             )
             return False
 
@@ -359,12 +360,12 @@ class Sheet(Properties):
         if result:
             self.reporter.info(
                 "Ficha de notificação considerada oportuna.",
-                f"Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
             )
         else:
             self.reporter.info(
                 "Ficha de notificação NÃO considerada oportuna.",
-                f"Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
             )
 
         return result
