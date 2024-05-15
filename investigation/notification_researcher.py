@@ -1,4 +1,5 @@
 import time
+from typing import Literal
 
 import requests
 from bs4 import BeautifulSoup
@@ -223,8 +224,6 @@ class NotificationResearcher(Criterias):
             }
         )
         res = self.session.post(self.endpoint, data=payload)
-        with open("response.html", "w") as f:
-            f.write(res.text)
         return res
 
     def __define_javax_faces(self):
@@ -239,6 +238,33 @@ class NotificationResearcher(Criterias):
             exit(1)
 
         self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
+
+    def __check_mother_names(
+        self, results: list[Sheet], strategy: Literal["equal", "contains"] = "equal"
+    ):
+        """Filter the results by mother name usign the comparator "equal"
+
+        Args:
+            results (list[Sheet]): The list of results to be filtered
+            strategy (Literal['equal', 'contains'], optional): The strategy to use. Defaults to "equal".
+        """
+        strategies = {
+            "equal": lambda x: x.mother_name == self.patient.mother_name,
+            "contains": lambda x: self.patient.mother_name.lower()
+            in x.mother_name.lower(),
+        }
+
+        # return filter(strategies[strategy], results)
+        _results = []
+        for result in results:
+            if strategies[strategy](result):
+                _results.append(result)
+            else:
+                self.reporter.debug(
+                    f"Resultado com nº de notificação {result.notification_number} será ignorado pelo critério de nome de mãe ({strategy})"
+                )
+
+        return _results
 
     def search(self, patient: Patient, use_notification_number: bool = False):
         """Search for a patient in the Sinan website (Consultar Notificação)
@@ -288,11 +314,21 @@ class NotificationResearcher(Criterias):
 
         end_time = time.time()
         elapsed_time = end_time - start_time
+
+        if results_count > 1:
+            print(
+                f"[PESQUISA] Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação."
+            )
+            self.reporter.warn(
+                "Paciente tem mais de 1 resultado de notificação. Verificando nome da mãe de cada notificação."
+            )
+            results = self.__check_mother_names(results)
+
         print(
-            f"[PESQUISA] Paciente pesquisado ({patient.name}) teve {results_count} notificações encontradas no Sinan Online em {elapsed_time:.2f} segundos.",
+            f"[PESQUISA] Paciente pesquisado ({patient.name}) finalizou a pesquisa em {elapsed_time:.2f} segundos. {results_count} notificações consideradas.",
         )
         self.reporter.debug(
-            f"{results_count} notificações encontradas no Sinan Online. Tempo de pesquisa: {elapsed_time:.2f} segundos."
+            f"Pesquisa feita em {elapsed_time:.2f} segundos. {results_count} notificações consideradas."
         )
         self.reporter.clean_patient()
         return results
