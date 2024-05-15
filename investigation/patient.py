@@ -76,5 +76,10 @@ class Properties:
 
 
 class Patient(Properties):
+    """Patient representation from GAL database
+
+    A lot of properties are defined here for easy access.
+    """
+
     def __init__(self, patient_data: dict):
         self.data = patient_data
