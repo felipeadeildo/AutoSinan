@@ -102,10 +102,10 @@ class NotificationType(TypedDict):
 
 
 PRIORITY_CLASSIFICATION_MAP: Mapping[str, int] = {
-    "5": 3,
-    "10": 2,
-    "11": 1,
-    "12": 0,
+    "5": 0,
+    "10": 1,
+    "11": 2,
+    "12": 3,
 }
 """Priority classification map to the exam classification (5, 10, 11, 12)"""
 

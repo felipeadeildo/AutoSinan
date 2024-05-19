@@ -10,6 +10,7 @@ from core.constants import (
     CLASSSIFICATION_MAP,
     EXAM_RESULT_ID,
     POSSIBLE_EXAM_TYPES,
+    PRIORITY_CLASSIFICATION_MAP,
     SINAN_BASE_URL,
     TODAY,
     TODAY_FORMATTED,
@@ -84,6 +85,7 @@ class Properties:
 
     @property
     def classifications(self):
+        """List of classifications on Sinan based on the exam results (it doenst include the 11 and 12 classification because its defined by a human.)"""
         classifications = []
         for exam_type, result in self.exam_results.items():
             possible_classifications = CLASSSIFICATION_MAP[exam_type]
@@ -134,6 +136,24 @@ class Properties:
     @property
     def positions_history(self) -> list[POSSIBLE_POSITIONS]:
         return getattr(self, "_positions_history", ["results"])
+
+    @property
+    def priority(self) -> int:
+        priority_queue = []
+        if self.dengue_classification in ("11", "12"):
+            priority_queue.append(
+                PRIORITY_CLASSIFICATION_MAP[self.dengue_classification]
+            )
+
+        # if have at least one classification as "10"
+        if any(map(lambda k: k == "10", self.classifications)):
+            priority_queue.append(PRIORITY_CLASSIFICATION_MAP["10"])
+
+        # if have at least one classification as "5", so added the priority of 5
+        if any(map(lambda k: k == "5", self.classifications)):
+            priority_queue.append(PRIORITY_CLASSIFICATION_MAP["5"])
+
+        return max(priority_queue)
 
 
 class Sheet(Properties):
@@ -354,7 +374,15 @@ class Sheet(Properties):
             return False
 
         rule = rules[self.patient.exam_type]
-        elapsed_time = abs((self.first_symptoms_date - self.patient.collection_date))
+        elapsed_time = self.patient.collection_date - self.first_symptoms_date
+
+        if elapsed_time.days < 0:
+            self.reporter.warn(
+                "Ficha de notificação desconsiderada (inoportuna) uma vez que a diferença entre Data de Coleta e a Data de 1ºs Sintomas é negativa.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+            )
+            return False
+
         result = rule(elapsed_time)
 
         if result:
@@ -488,7 +516,10 @@ class Sheet(Properties):
             )
 
     def __fill_classification(self):
-        """Select the classification based on the exam results (62 - Classificação)"""
+        """Select the classification based on the exam results (62 - Classificação)
+
+        If the classification is already defined to 11 or 12 it will not be changed
+        """
         if self.dengue_classification in ("11", "12"):
             self.reporter.warn(
                 f"Investigação JÁ possui classificação selecionada: {self.f_dengue_classification}",
@@ -601,8 +632,7 @@ class Sheet(Properties):
 
     def delete(self):
         """Delete the notification sheet"""
-        # TODO: Remove next line when the exclude sheets are implemented correctly
-        return
+
         self.__open_notification_sheet()
 
         self.session.post(
@@ -611,6 +641,11 @@ class Sheet(Properties):
                 **self.notification_form_data,
                 "form:j_id306": "Excluir",
             },
+        )
+        self.reporter.set_patient(self.patient)
+
+        self.reporter.debug(
+            "Notificação excluída.", f"Notificação excluída: {self.notification_number}"
         )
 
     def return_to_results_page(self):
