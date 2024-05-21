@@ -1,6 +1,7 @@
 import time
-from typing import Literal
+from typing import Callable, Literal, Mapping
 
+import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
@@ -248,7 +249,7 @@ class NotificationResearcher(Criterias):
             results (list[Sheet]): The list of results to be filtered
             strategy (Literal['equal', 'contains'], optional): The strategy to use. Defaults to "equal".
         """
-        strategies = {
+        strategies: Mapping[Literal["equal", "contains"], Callable[[Sheet], bool]] = {
             "equal": lambda x: x.mother_name == self.patient.mother_name,
             "contains": lambda x: self.patient.mother_name.lower()
             in x.mother_name.lower(),
@@ -261,7 +262,8 @@ class NotificationResearcher(Criterias):
                 _results.append(result)
             else:
                 self.reporter.debug(
-                    f"Resultado com nº de notificação {result.notification_number} será ignorado pelo critério de nome de mãe ({strategy})"
+                    "Resultado com será ignorado pelo critério de nome de mãe.",
+                    f"Nº da Notificação: {result.notification_number} | Estratégia Utilizada: {strategy}",
                 )
 
         return _results
@@ -284,6 +286,14 @@ class NotificationResearcher(Criterias):
 
         criterias: list[SEARCH_POSSIBLE_CRITERIAS] = []
         if use_notification_number:
+            if pd.isna(patient.notification_number):
+                print(
+                    "[PESQUISA] Este paciente não possui número de notificação para que seja utilizada na pesquisa."
+                )
+                self.reporter.warn(
+                    "Exame sem número de notificação. Pesquisa abortada."
+                )
+                return []
             criterias.extend(["Número da Notificação"])
         else:
             criterias.extend(
