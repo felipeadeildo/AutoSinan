@@ -74,9 +74,14 @@ class Report:
         Args:
             data (pd.DataFrame): The GAL database
         """
-        release_dates = ", ".join(
-            map(lambda d: d.strftime("%d.%m.%Y"), data["Data da Liberação"].unique())
-        )
+        max_release_date = data["Data da Liberação"].max().strftime("%d.%m.%Y")
+        min_release_date = data["Data da Liberação"].min().strftime("%d.%m.%Y")
+
+        if max_release_date != min_release_date:
+            release_dates = f"{min_release_date} à {max_release_date}"
+        else:
+            release_dates = max_release_date
+
         exams = ", ".join(map(lambda e: EXAMS_GAL_MAP[e], data["Exame"].unique()))
         run_datetime = EXECUTION_DATE.strftime("%d.%m.%Y às %Hh%M")
         self.__reports_filename = f"Investigação ({exams}) - liberação {release_dates} - execução {run_datetime}.xlsx"
