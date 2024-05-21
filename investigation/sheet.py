@@ -155,6 +155,11 @@ class Properties:
 
         return max(priority_queue)
 
+    @property
+    def mother_name(self) -> str:
+        """The mother name on the notification sheet"""
+        return self.notification_form_data["form:notificacao_nome_mae"]
+
 
 class Sheet(Properties):
     """The sheet class used to interact with the sheets in the investigation
@@ -283,20 +288,22 @@ class Sheet(Properties):
 
         self.__verify_investigation_sheet(depth + 1)
 
-    def __verify_investigation_sheet(self, depth: int = 1):
+    def __verify_investigation_sheet(self, depth: int = 1, retry: bool = True) -> bool:
         """Verify if the `investigation_soup` is really the investigation page or a different page"""
         first_investigation_input = valid_tag(
             self.investigation_soup.find(attrs={"id": "form:dtInvestigacaoInputDate"})
         )
 
         if not first_investigation_input:
-            self.__click_popup_ok(depth)
+            if retry:
+                self.__click_popup_ok(depth)
         else:
             self.position = "investigation"
 
-    def __enable_investigation_sheet(self):
-        """Try to enable the investigation tab "clicking" in "Salvar" and "Ok" buttons"""
+        return first_investigation_input is not None
 
+    def __update_notification_form_data_javascript_rendering(self):
+        """Update the `notification_form_data` to be equal to the form data rendered in javascript on page load"""
         self.notification_form_data.update(
             {
                 "form:richagravo": self.notification_form_data[
@@ -320,6 +327,11 @@ class Sheet(Properties):
             }
         )
 
+    def __enable_investigation_sheet(self):
+        """Try to enable the investigation tab "clicking" in "Salvar" and "Ok" buttons"""
+
+        self.__update_notification_form_data_javascript_rendering()
+
         res = self.session.post(
             self.master_endpoint,
             {**self.notification_form_data, "form:botaoSalvar": "Salvar"},
@@ -328,6 +340,34 @@ class Sheet(Properties):
         self.investigation_soup = BeautifulSoup(res.content, "html.parser")
 
         self.__verify_investigation_sheet()
+
+    def __navigate_investigation_sheet(self):
+        """Navigate to the investigation tab"""
+
+        self.__update_notification_form_data_javascript_rendering()
+
+        res = self.session.post(
+            self.master_endpoint,
+            {
+                **self.notification_form_data,
+                "form:tabInvestigacao": "form:tabInvestigacao",
+            },
+        )
+
+        self.investigation_soup = BeautifulSoup(res.content, "html.parser")
+
+        result = self.__verify_investigation_sheet(retry=False)
+        if not result:
+            error_filename = f"error_{self.patient.name}.html"
+            with open(error_filename, "wb") as f:
+                f.write(res.content)
+            print(
+                "[ERRO] Falha ao carregar a aba de investigação. Erro precisa ser tratado pelo programador."
+            )
+            self.reporter.error(
+                "Falha ao carregar a aba de investigação.",
+                f"Um arquivo com a resposta do servidor foi criado com o nome de {error_filename}.",
+            )
 
     def __open_investigation_sheet(self):
         """Open investigation sheet enabling the investigation tab if it is disabled"""
@@ -346,6 +386,9 @@ class Sheet(Properties):
                 "Aba de investigação não está habilitada. Habilitando..."
             )
             self.__enable_investigation_sheet()
+        else:
+            self.reporter.info("Aba de investigação já está habilitada.")
+            self.__navigate_investigation_sheet()
 
         self.__loads_investigation_form_data()
 
