@@ -441,6 +441,31 @@ class Sheet(Properties):
 
         return result
 
+    @property
+    def is_closed_by_municipality(self) -> bool:
+        """Check if the notification was closed by municipality"""
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        input_tag = valid_tag(
+            self.notification_soup.find("input", {"id": "form:habilitaAntesPrazo"})
+        )
+
+        if not input_tag:
+            self.reporter.error(
+                "Ao tentar verificar se a ficha foi encerrada pelo município o bot encontrou um elemento inválido.",
+                "Status de encerrado pelo município definido como Falso.",
+            )
+            return False
+
+        return (
+            input_tag.get("checked") == "checked"
+            and input_tag.get("disabled") == "disabled"
+        )
+
     def __save_investigation(self):
         """Save the investigation filled form"""
         payload = get_form_data(self.investigation_soup)

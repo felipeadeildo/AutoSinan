@@ -381,4 +381,10 @@ class NotificationResearcher(Criterias):
             if sheet.is_oportunity:
                 values.append(sheet)
 
+        if any(sheet.is_closed_by_municipality for sheet in values):
+            self.reporter.warn(
+                "Uma das fichas encontradas na pesquisa foi encerrada pelo município. Portanto toso os resultados deste paciente será ignorado.",
+                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in values)}",
+            )
+            return []
         return values
