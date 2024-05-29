@@ -5,7 +5,12 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from core.constants import POSSIBLE_AGRAVOS, SEARCH_POSSIBLE_CRITERIAS, SINAN_BASE_URL
+from core.constants import (
+    POSSIBLE_AGRAVOS,
+    POSSIBLE_MUNICIPALITIES,
+    SEARCH_POSSIBLE_CRITERIAS,
+    SINAN_BASE_URL,
+)
 from core.utils import generate_search_base_payload, valid_tag
 from investigation.patient import Patient
 from investigation.report import Report
@@ -193,11 +198,14 @@ class NotificationResearcher(Criterias):
         self,
         session: requests.Session,
         agravo: POSSIBLE_AGRAVOS,
+        municipality: POSSIBLE_MUNICIPALITIES,
         criterias: dict,
         reporter: Report,
     ):
         base_payload = generate_search_base_payload(agravo)
         endpoint = f"{SINAN_BASE_URL}/sinan/secured/consultar/consultarNotificacao.jsf"
+
+        self.municipality: POSSIBLE_MUNICIPALITIES = municipality
 
         super().__init__(session, criterias, reporter, endpoint, base_payload)
 
@@ -362,7 +370,7 @@ class NotificationResearcher(Criterias):
             return []
 
         column_names = [th.span.text.strip() for th in thead.find_all("th")]
-        values = []
+        sheets: list[Sheet] = []
 
         for i, row in enumerate(tbody.find_all("tr"), 0):
             row_values = [td.text.strip() for td in row.find_all("td")]
@@ -376,15 +384,35 @@ class NotificationResearcher(Criterias):
                 }
             )
 
-            sheet = Sheet(self.session, self.patient, value, payload, self.reporter)
+            sheet = Sheet(
+                self.session,
+                self.municipality,
+                self.patient,
+                value,
+                payload,
+                self.reporter,
+            )
 
             if sheet.is_oportunity:
-                values.append(sheet)
+                sheets.append(sheet)
 
-        if any(sheet.is_closed_by_municipality for sheet in values):
+        if any(sheet.is_return_flow for sheet in sheets):
             self.reporter.warn(
-                "Uma das fichas encontradas na pesquisa foi encerrada pelo município. Portanto toso os resultados deste paciente será ignorado.",
-                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in values)}",
+                "Uma das fichas encontradas na pesquisa já foi habilitada para fluxo de retorno. Portanto todos os resultados deste paciente será ignorado.",
+                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
             )
             return []
-        return values
+        elif any(sheet.is_notified_by_another_municipality for sheet in sheets):
+            self.reporter.warn(
+                "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto todos os resultados deste paciente será ignorado.",
+                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+            )
+            return []
+        elif any(sheet.is_extra_case for sheet in sheets):
+            self.reporter.warn(
+                "Uma das fichas encontradas na pesquisa é de caso extra. Portanto todos os resultados deste paciente será ignorado. (CHAMAR O FELIPE)",
+                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+            )
+            return []
+        else:
+            return sheets

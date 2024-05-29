@@ -14,6 +14,7 @@ from .constants import (
     CURRENT_YEAR_FIRST_DAY,
     POSSIBLE_AGRAVOS,
     POSSIBLE_AGRAVOS_LIST,
+    POSSIBLE_MUNICIPALITIES_LIST,
     SEARCH_POSSIBLE_CRITERIAS_LIST,
     SETTINGS_FILE,
     TODAY_FORMATTED,
@@ -143,13 +144,18 @@ def __create_initial_settings():
 
         criterias[criteria] = {"operacao": operation, "pode_usar": use_criteria}
 
+    criterias["Número da Notificação"] = {"operacao": "Igual", "pode_usar": True}
     clear_screen()
 
-    criterias["Número da Notificação"] = {"operacao": "Igual", "pode_usar": True}
+    print("Qual destes municípios é o município onde o bot está rodando?")
+    for i, municipality in enumerate(POSSIBLE_MUNICIPALITIES_LIST, 1):
+        print(f"\t{i} - {municipality}")
+    municipality = POSSIBLE_MUNICIPALITIES_LIST[int(input("Município: ")) - 1]
 
     investigacao = {
         "agravo": agravo,
         "criterios": criterias,
+        "municipio": municipality,
     }
 
     return {

@@ -41,8 +41,9 @@ class InvestigationBot(Bot):
         """Create a notification searcher that will be used to research notifications given a patient"""
         agravo = self._settings["sinan_investigacao"]["agravo"]
         criterios = self._settings["sinan_investigacao"]["criterios"]
+        municipality = self._settings["sinan_investigacao"]["municipio"]
         self.researcher = NotificationResearcher(
-            self.session, agravo, criterios, self.reporter
+            self.session, agravo, municipality, criterios, self.reporter
         )
 
     def __create_duplicate_checker(self):
@@ -147,3 +148,4 @@ class InvestigationBot(Bot):
             )
             self.__fill_form(patient)
             print("\n" + "*" * 25, end="\n")
+            # input("Pressione Enter para prpsseguir para o próximo paciente.")

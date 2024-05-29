@@ -10,6 +10,7 @@ from core.constants import (
     CLASSSIFICATION_MAP,
     EXAM_RESULT_ID,
     POSSIBLE_EXAM_TYPES,
+    POSSIBLE_MUNICIPALITIES,
     PRIORITY_CLASSIFICATION_MAP,
     SINAN_BASE_URL,
     TODAY,
@@ -29,6 +30,9 @@ class Properties:
     notification_form_data: dict
     investigation_soup: BeautifulSoup
     investigation_form_data: dict
+    reporter: Report
+    patient: Patient
+    municipality: POSSIBLE_MUNICIPALITIES
 
     @property
     def first_symptoms_date(self) -> datetime:
@@ -160,6 +164,150 @@ class Properties:
         """The mother name on the notification sheet"""
         return self.notification_form_data["form:notificacao_nome_mae"]
 
+    @property
+    def is_oportunity(self) -> bool:
+        """Check if the patient is oportunity to be investigated"""
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se o paciente é oportuno, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        self.reporter.set_patient(self.patient)
+
+        rules = {
+            "IgM": lambda time: time + timedelta(days=1) >= timedelta(days=6),
+            "NS1": lambda time: time <= timedelta(days=5),
+            "PCR": lambda time: time <= timedelta(days=5),
+        }
+
+        if not self.patient.exam_type or self.patient.exam_type not in rules:
+            self.reporter.error(
+                f"Ao tentar verificar oportunidade do paciente, o bot encontrou um tipo de exame inválido: {self.patient.exam_type}.",
+                "Oportunidade definida como Falsa.",
+            )
+            return False
+
+        rule = rules[self.patient.exam_type]
+        elapsed_time = self.patient.collection_date - self.first_symptoms_date
+
+        if elapsed_time.days < 0:
+            self.reporter.warn(
+                "Ficha de notificação desconsiderada (inoportuna) uma vez que a diferença entre Data de Coleta e a Data de 1ºs Sintomas é negativa.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+            )
+            return False
+
+        result = rule(elapsed_time)
+
+        if result:
+            self.reporter.info(
+                "Ficha de notificação considerada oportuna.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+            )
+        else:
+            self.reporter.info(
+                "Ficha de notificação NÃO considerada oportuna.",
+                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+            )
+
+        return result
+
+    @property
+    def municipality_of_residence(self) -> str:
+        return self.notification_form_data[
+            "form:notificacao_paciente_endereco_municipio_noMunicipiocomboboxField"
+        ]
+
+    @property
+    def save_button_exists(self) -> bool:
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        save_button_tag = self.notification_soup.find("input", {"id": "form:btnSalvar"})
+
+        return valid_tag(save_button_tag) is not None
+
+    @property
+    def is_return_flow(self) -> bool:
+        """Patient was notified by this municipality but his residence is outside the municipality"""
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        checkbox_tag = valid_tag(
+            self.notification_soup.find("input", {"id": "form:habilitaAntesPrazo"})
+        )
+
+        if not checkbox_tag:
+            self.reporter.error(
+                "Ao tentar verificar se a ficha é fluxo de retorno, pois o bot não encontrou a caixinha de 'Habilitar para Local de Residência'",
+                "Resultado foi definido como Falso.",
+            )
+            return False
+
+        is_checked = checkbox_tag.get("checked") == "checked"
+        is_municipality_resident = self.municipality_of_residence == self.municipality
+        return (
+            is_checked and not self.save_button_exists and not is_municipality_resident
+        )
+
+    @property
+    def is_notified_by_another_municipality(self) -> bool:
+        """The patient is municipality's resident but was notified by another municipality"""
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        checkbox_tag = valid_tag(
+            self.notification_soup.find("input", {"id": "form:habilitaAntesPrazo"})
+        )
+
+        if not checkbox_tag:
+            self.reporter.error(
+                "Ao tentar verificar se a ficha foi encerrada por outro município o bot não encontrou a caixinha de 'Habilitar para Local de Residência'",
+                "Resultado foi definido como Falso.",
+            )
+            return False
+
+        is_checked = checkbox_tag.get("checked") == "checked"
+        is_municipality_resident = self.municipality_of_residence == self.municipality
+
+        return (
+            not is_checked and not self.save_button_exists and is_municipality_resident
+        )
+
+    @property
+    def is_extra_case(self) -> bool:
+        """This is a test case that can be removed later"""
+        if "notification" not in self.positions_history:
+            print(
+                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            )
+            return False
+
+        checkbox_tag = valid_tag(
+            self.notification_soup.find("input", {"id": "form:habilitaAntesPrazo"})
+        )
+
+        if not checkbox_tag:
+            self.reporter.error(
+                "Ao tentar verificar caso de teste extra, o bot não encontrou a caixinha de 'Habilitar para Local de Residência'",
+                "Resultado foi definido como Falso.",
+            )
+            return False
+
+        is_checked = checkbox_tag.get("checked") == "checked"
+        is_municipality_resident = self.municipality_of_residence == self.municipality
+        return is_checked and not self.save_button_exists and is_municipality_resident
+
 
 class Sheet(Properties):
     """The sheet class used to interact with the sheets in the investigation
@@ -170,12 +318,14 @@ class Sheet(Properties):
     def __init__(
         self,
         session: Session,
+        municipality: POSSIBLE_MUNICIPALITIES,
         patient: Patient,
         search_result_data: dict,
         open_payload: dict,
         reporter: Report,
     ):
         self.session = session
+        self.municipality = municipality
         self.patient = patient
         self.search_result_data = search_result_data
         self.open_payload = open_payload
@@ -391,80 +541,6 @@ class Sheet(Properties):
             self.__navigate_investigation_sheet()
 
         self.__loads_investigation_form_data()
-
-    @property
-    def is_oportunity(self) -> bool:
-        """Check if the patient is oportunity to be investigated"""
-        if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se o paciente é oportuno, é preciso ter passado pela aba de notificação ao menos uma vez."
-            )
-            return False
-
-        self.reporter.set_patient(self.patient)
-
-        rules = {
-            "IgM": lambda time: time + timedelta(days=1) >= timedelta(days=6),
-            "NS1": lambda time: time <= timedelta(days=5),
-            "PCR": lambda time: time <= timedelta(days=5),
-        }
-
-        if not self.patient.exam_type or self.patient.exam_type not in rules:
-            self.reporter.error(
-                f"Ao tentar verificar oportunidade do paciente, o bot encontrou um tipo de exame inválido: {self.patient.exam_type}.",
-                "Oportunidade definida como Falsa.",
-            )
-            return False
-
-        rule = rules[self.patient.exam_type]
-        elapsed_time = self.patient.collection_date - self.first_symptoms_date
-
-        if elapsed_time.days < 0:
-            self.reporter.warn(
-                "Ficha de notificação desconsiderada (inoportuna) uma vez que a diferença entre Data de Coleta e a Data de 1ºs Sintomas é negativa.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
-            )
-            return False
-
-        result = rule(elapsed_time)
-
-        if result:
-            self.reporter.info(
-                "Ficha de notificação considerada oportuna.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
-            )
-        else:
-            self.reporter.info(
-                "Ficha de notificação NÃO considerada oportuna.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
-            )
-
-        return result
-
-    @property
-    def is_closed_by_municipality(self) -> bool:
-        """Check if the notification was closed by municipality"""
-        if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
-            )
-            return False
-
-        input_tag = valid_tag(
-            self.notification_soup.find("input", {"id": "form:habilitaAntesPrazo"})
-        )
-
-        if not input_tag:
-            self.reporter.error(
-                "Ao tentar verificar se a ficha foi encerrada pelo município o bot encontrou um elemento inválido.",
-                "Status de encerrado pelo município definido como Falso.",
-            )
-            return False
-
-        return (
-            input_tag.get("checked") == "checked"
-            and input_tag.get("disabled") == "disabled"
-        )
 
     def __save_investigation(self):
         """Save the investigation filled form"""

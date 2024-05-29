@@ -162,3 +162,10 @@ POSSIBLE_AGRAVOS_LIST: list[POSSIBLE_AGRAVOS] = [
     "A92.0 - FEBRE DE CHIKUNGUNYA",
 ]
 """List of possible agravos for the app in general"""
+
+
+POSSIBLE_MUNICIPALITIES = Literal["FLORIANOPOLIS"]
+"""[TypeHint] Possible municipalities where the app is running"""
+
+POSSIBLE_MUNICIPALITIES_LIST: list[POSSIBLE_MUNICIPALITIES] = ["FLORIANOPOLIS"]
+"""List of possible municipalities where the app is running"""
