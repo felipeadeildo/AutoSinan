@@ -71,7 +71,7 @@ class Properties:
         return self.exam_result_map[self.exam_result]
 
     @property
-    def sorotypes(self):
+    def sorotypes(self) -> list[str]:
         return self.data["Sorotipos"].split(" e ")
 
 
