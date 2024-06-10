@@ -72,7 +72,7 @@ class Properties:
 
     @property
     def sorotypes(self) -> list[str]:
-        return self.data["Sorotipos"].split(" e ")
+        return self.data.get("Sorotipos", "").split(" e ")
 
 
 class Patient(Properties):
