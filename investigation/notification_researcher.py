@@ -323,7 +323,7 @@ class NotificationResearcher(Criterias):
 
         if results_count == 0 and not use_notification_number:
             print(
-                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados pacientes para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
+                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
             )
             self.reporter.warn(
                 "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
@@ -396,23 +396,31 @@ class NotificationResearcher(Criterias):
             if sheet.is_oportunity:
                 sheets.append(sheet)
 
-        if any(sheet.is_return_flow for sheet in sheets):
+        if any(
+            sheet.result_municipality_notified != sheet.result_municipality_residence
+            for sheet in sheets
+        ):
             self.reporter.warn(
-                "Uma das fichas encontradas na pesquisa já foi habilitada para fluxo de retorno. Portanto todos os resultados deste paciente será ignorado.",
-                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                "Uma das notificações encontradas não foi notificada pelo município. Analisando possibilidades de notificação.",
+                f"Nº de Notificação das fichas para análise: {';'.join(sheet.notification_number for sheet in sheets)}",
             )
-            return []
-        elif any(sheet.is_notified_by_another_municipality for sheet in sheets):
-            self.reporter.warn(
-                "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto todos os resultados deste paciente será ignorado.",
-                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
-            )
-            return []
-        elif any(sheet.is_extra_case for sheet in sheets):
-            self.reporter.warn(
-                "Uma das fichas encontradas na pesquisa é de caso extra. Portanto todos os resultados deste paciente será ignorado. (CHAMAR O FELIPE)",
-                f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
-            )
-            return []
-        else:
-            return sheets
+            if any(sheet.is_return_flow for sheet in sheets):
+                self.reporter.warn(
+                    "Uma das fichas encontradas na pesquisa já foi habilitada para fluxo de retorno. Portanto todos os resultados deste paciente será ignorado.",
+                    f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                )
+                return []
+            elif any(sheet.is_notified_by_another_municipality for sheet in sheets):
+                self.reporter.warn(
+                    "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto todos os resultados deste paciente será ignorado.",
+                    f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                )
+                return []
+            elif any(sheet.is_extra_case for sheet in sheets):
+                self.reporter.warn(
+                    "Uma das fichas encontradas na pesquisa é de caso extra. Portanto todos os resultados deste paciente será ignorado. (CHAMAR O FELIPE)",
+                    f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                )
+                return []
+
+        return sheets

@@ -33,6 +33,7 @@ class Properties:
     reporter: Report
     patient: Patient
     municipality: POSSIBLE_MUNICIPALITIES
+    search_result_data: dict
 
     @property
     def first_symptoms_date(self) -> datetime:
@@ -307,6 +308,14 @@ class Properties:
         is_checked = checkbox_tag.get("checked") == "checked"
         is_municipality_resident = self.municipality_of_residence == self.municipality
         return is_checked and not self.save_button_exists and is_municipality_resident
+
+    @property
+    def result_municipality_notified(self) -> str:
+        return self.search_result_data["Município Not."]
+
+    @property
+    def result_municipality_residence(self) -> str:
+        return self.search_result_data["Município Res."]
 
 
 class Sheet(Properties):
