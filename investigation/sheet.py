@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from typing import Literal, Mapping
 
 from bs4 import BeautifulSoup
-from requests import Session
+from requests import Response, Session
 
 from core.constants import (
     CLASSIFICATION_FRIENDLY_MAP,
@@ -428,18 +428,17 @@ class Sheet(Properties):
 
         self.reporter.info(f"Texto do popUp {depth}: {modal_text}")
 
-        payload_modal_ok = get_form_data(soup, "div", {"id": modal_id})
+        payload_modal_ok = get_form_data(
+            soup, "div", {"id": modal_id}, not_include_starts_with="--"
+        )
         payload_modal_ok = {
             k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
         }
 
-        payload = get_form_data(soup)
-        payload.update(payload_modal_ok)
-
         print("[INVESTIGAÇÃO] Clicando em 'Ok' para continuar.", end=" ")
         res = self.session.post(
             self.master_endpoint,
-            data=payload,
+            data={**self.notification_form_data, **payload_modal_ok},
         )
 
         self.investigation_soup = BeautifulSoup(res.content, "html.parser")
@@ -551,28 +550,35 @@ class Sheet(Properties):
 
         self.__loads_investigation_form_data()
 
+    def __get_errors(self, response: Response) -> list[str]:
+        """Get the error messages from the response"""
+        soup = BeautifulSoup(response.content, "html.parser")
+        error_tags = soup.find_all("li", {"class": "error"})
+
+        return [error.get_text() for error in error_tags if error.get_text()]
+
     def __save_investigation(self):
         """Save the investigation filled form"""
         payload = get_form_data(self.investigation_soup)
         payload.update({"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"})
 
         res = self.session.post(self.master_endpoint, data=payload)
-        soup = BeautifulSoup(res.content, "html.parser")
-        errors_txt = False
-        if errors := soup.find_all("li", {"class": "error"}):
-            errors_txt = "\n".join(
-                [error.get_text() for error in errors if error.get_text()]
-            )
+        has_errors = self.__log_errors(res, "salvar a investigação")
 
-        if errors_txt:
+        if not has_errors:
+            print("Ok!")
+
+    def __log_errors(self, response: Response, doing: str):
+        errors = self.__get_errors(response)
+        if errors:
+            errors_txt = "\n".join(errors)
             self.reporter.error(
-                "Ao tentar salvar a investigação o site retornou esta mensagem de erro (ver observações)",
+                f"Erro ao tentar {doing} (ver observações)",
                 errors_txt,
             )
-            print("Erro!")
             print(f"\tMensagem do Site: '{errors_txt}'")
-        else:
-            print("Ok!")
+
+        return bool(errors)
 
     def __fill_exam_result(self):
         """Fill the exam result on sinan investigation form
@@ -595,10 +601,11 @@ class Sheet(Properties):
                 }
             )
 
-            self.session.post(
+            res = self.session.post(
                 self.master_endpoint,
                 data={**self.investigation_form_data, "form:j_id572": "form:j_id572"},
             )
+            self.__log_errors(res, "preencher resultado do exame")
 
             if self.patient.sinan_result_id == "1":
                 sotorype_dengue = max(
@@ -616,13 +623,14 @@ class Sheet(Properties):
                     }
                 )
 
-                self.session.post(
+                res = self.session.post(
                     self.master_endpoint,
                     data={
                         **self.investigation_form_data,
                         "form:j_id577": "form:j_id577",
                     },
                 )
+                self.__log_errors(res, "preencher sorotipo")
 
         elif self.patient.exam_type == "IgM":
             sinan_collection_date_key = "form:dengue_dataColetaExameSorologicoInputDate"
@@ -634,6 +642,11 @@ class Sheet(Properties):
                     sinan_collection_result_key: self.patient.sinan_result_id,
                 }
             )
+            res = self.session.post(
+                self.master_endpoint,
+                data={**self.investigation_form_data, "form:j_id530": "form:j_id530"},
+            )
+            self.__log_errors(res, "preencher resultado do exame")
 
         elif self.patient.exam_type == "NS1":
             sinan_collection_date_key = "form:dengue_dataColetaNS1InputDate"
@@ -645,6 +658,11 @@ class Sheet(Properties):
                     sinan_collection_result_key: self.patient.sinan_result_id,
                 }
             )
+            res = self.session.post(
+                self.master_endpoint,
+                data={**self.investigation_form_data, "form:j_id542": "form:j_id542"},
+            )
+            self.__log_errors(res, "preencher resultado do exame")
 
         print(
             f"[PREENCHIMENTO] Definindo resultado para exame tipo {self.patient.exam_type} com data de coleta {self.patient.f_collection_date}."
@@ -663,10 +681,11 @@ class Sheet(Properties):
             self.investigation_form_data.update(
                 {"form:dtInvestigacaoInputDate": f_today}
             )
-            self.session.post(
+            res = self.session.post(
                 self.master_endpoint,
                 data={**self.investigation_form_data, "form:j_id402": "form:j_id402"},
             )
+            self.__log_errors(res, "preencher data da investigação")
 
     def __fill_classification(self):
         """Select the classification based on the exam results (62 - Classificação)
@@ -693,10 +712,11 @@ class Sheet(Properties):
             )
             return
 
-        self.session.post(
+        res = self.session.post(
             self.master_endpoint,
             data={**self.investigation_form_data, "form:j_id713": "form:j_id713"},
         )
+        self.__log_errors(res, "preencher classificação")
         self.reporter.debug(
             f"Classificação selecionada: {self.f_dengue_classification}"
         )
@@ -704,10 +724,11 @@ class Sheet(Properties):
     def __fill_criteria(self):
         """Select the confirmation criteria (63 - Critério de Confirmação)"""
         self.investigation_form_data.update({"form:dengue_criterio": "1"})
-        self.session.post(
+        res = self.session.post(
             self.master_endpoint,
             data={**self.investigation_form_data, "form:j_id718": "form:j_id718"},
         )
+        self.__log_errors(res, "preencher critério de confirmação")
 
     def __fill_closing_date(self):
         if not self.dengue_classification:
@@ -739,10 +760,11 @@ class Sheet(Properties):
             {"form:dtEncerramentoInputDate": considered_date}
         )
 
-        self.session.post(
+        res = self.session.post(
             self.master_endpoint,
             {**self.investigation_form_data, "form:j_id739": "form:j_id739"},
         )
+        self.__log_errors(res, "preencher data de encerramento")
 
     def __fill_clinical_signs(self):
         """Select the clinical signs (33 - Sinais Clinicos)"""
@@ -769,8 +791,8 @@ class Sheet(Properties):
         self.__open_investigation_sheet()
 
         form_builders = [
-            self.__fill_exam_result,
             self.__fill_investigation_date,
+            self.__fill_exam_result,
             self.__fill_classification,
             self.__fill_criteria,
             self.__fill_closing_date,
@@ -788,13 +810,14 @@ class Sheet(Properties):
 
         self.__open_notification_sheet()
 
-        self.session.post(
+        res = self.session.post(
             self.master_endpoint,
             {
                 **self.notification_form_data,
                 "form:j_id306": "Excluir",
             },
         )
+        self.__log_errors(res, "excluir notificação")
         self.reporter.set_patient(self.patient)
 
         self.reporter.debug(

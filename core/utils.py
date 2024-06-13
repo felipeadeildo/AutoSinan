@@ -1,7 +1,7 @@
 import os
 import re
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Union
 
 import pandas as pd
 import requests
@@ -229,7 +229,14 @@ def generate_search_base_payload(agravo: POSSIBLE_AGRAVOS):
 
 
 def get_form_data(
-    soup: BeautifulSoup, tag_name: Optional[str] = None, attrs: dict = {"id": "form"}
+    soup: BeautifulSoup,
+    tag_name: Optional[str] = None,
+    attrs: dict = {"id": "form"},
+    not_include_starts_with: Union[str, tuple] = (
+        "form:j_id",
+        "form:btn",
+        "form:botao",
+    ),
 ) -> dict:
     """Return the default values of the form fields
 
@@ -272,7 +279,5 @@ def get_form_data(
     data = {**inputs, **selects}
 
     return {
-        k: v
-        for k, v in data.items()
-        if k and not k.startswith(("form:j_id", "form:btn", "form:botao"))
+        k: v for k, v in data.items() if k and not k.startswith(not_include_starts_with)
     }
