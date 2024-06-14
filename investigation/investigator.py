@@ -131,3 +131,11 @@ class DuplicateChecker:
                 )
                 for sheet in episodes[-1]:
                     sheet.investigate_patient()
+        else:
+            if len(episodes) > 1:
+                self.reporter.error(
+                    "A pesquisa retornou vários resultados que por sua vez gerou mais de um epsódio. O bot não sabe o que fazer nesta situação.",
+                    "Matrix Error kk",
+                )
+                return
+            self.__investigate_episode(episodes[0])
