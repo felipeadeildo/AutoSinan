@@ -1,5 +1,7 @@
 from datetime import datetime
 
+import pandas as pd
+
 from core.constants import (
     EXAM_RESULT_ID,
     EXAM_VALUE_COL_MAP,
@@ -72,7 +74,10 @@ class Properties:
 
     @property
     def sorotypes(self) -> list[str]:
-        return self.data.get("Sorotipos", "").split(" e ")
+        sorotypes = self.data.get("Sorotipo", "")
+        if pd.isna(sorotypes):
+            return []
+        return sorotypes.split(" e ")
 
 
 class Patient(Properties):
