@@ -148,4 +148,4 @@ class InvestigationBot(Bot):
             )
             self.__fill_form(patient)
             print("\n" + "*" * 25, end="\n")
-            # input("Pressione Enter para prpsseguir para o próximo paciente.")
+            # input("Pressione Enter para prosseguir para o próximo paciente.")
