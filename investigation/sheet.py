@@ -559,10 +559,16 @@ class Sheet(Properties):
 
     def __save_investigation(self):
         """Save the investigation filled form"""
-        payload = get_form_data(self.investigation_soup)
-        payload.update({"form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao"})
 
-        res = self.session.post(self.master_endpoint, data=payload)
+        res = self.session.post(
+            self.master_endpoint,
+            data={
+                **self.investigation_form_data,
+                "form:btnSalvarInvestigacao": "form:btnSalvarInvestigacao",
+                "form:j_id420": "Sinan Online",
+                "AJAXREQUEST": "_viewRoot",
+            },
+        )
         has_errors = self.__log_errors(res, "salvar a investigação")
 
         if not has_errors:
@@ -757,7 +763,7 @@ class Sheet(Properties):
             considered_date = TODAY_FORMATTED
 
         self.investigation_form_data.update(
-            {"form:dtEncerramentoInputDate": considered_date}
+            {"form:dengue_dataEncerramentoInputDate": considered_date}
         )
 
         res = self.session.post(
@@ -772,7 +778,9 @@ class Sheet(Properties):
             {
                 k: ((v or "2") if not self.has_previous_investigation else "2")
                 for k, v in self.investigation_form_data.items()
-                if k.startswith("form:chikungunya_sinais")
+                if k.startswith(
+                    ("form:chikungunya_sinais", "form:chinkungunya_doencas")
+                )
             }
         )
 
