@@ -23,6 +23,7 @@ class Report:
             "Observações",
             "Data e Hora da Mensagem",
             "Sorotipo",
+            "Data da Coleta",
         ]
         self.df = pd.DataFrame(columns=self.columns)
         self.df = self.df[self.columns]
@@ -56,7 +57,8 @@ class Report:
             "Data de Nascimento": patient.f_birth_date,
             "Tipo de Exame": exam_type,
             "Resultado do Exame": patient.exam_result,
-            "Sorotipo": "; ".join(patient.sorotypes),
+            "Sorotipo": "; ".join(patient.sorotypes) or "Nenhum Sorotipo Informado",
+            "Data da Coleta": patient.f_collection_date,
         }
 
     def clean_patient(self):
