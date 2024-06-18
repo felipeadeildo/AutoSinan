@@ -67,10 +67,21 @@ class Report:
 
     def __export(self):
         """Export the current dataframe to an excel file if the filename is defined"""
-        if self.__reports_filename is not None:
-            self.df.to_excel(
-                SCRIPT_GENERATED_PATH / self.__reports_filename, index=False
-            )
+        if self.__reports_filename is None:
+            return
+
+        writer = pd.ExcelWriter(
+            SCRIPT_GENERATED_PATH / self.__reports_filename, engine="xlsxwriter"
+        )
+        self.df.to_excel(writer, sheet_name="Relatório", index=False)
+
+        worksheet = writer.sheets["Relatório"]
+
+        for idx, col in enumerate(self.df.columns):
+            max_len = max(self.df[col].astype(str).str.len().max(), len(col)) + 2
+            worksheet.set_column(idx, idx, max_len)
+
+        writer.save()  # type: ignore [call-arg]
 
     def generate_reports_filename(self, data: pd.DataFrame):
         """Generate the reports filename based on the date and the time of execution and release
