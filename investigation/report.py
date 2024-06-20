@@ -2,6 +2,7 @@ from datetime import datetime
 from typing import Literal
 
 import pandas as pd
+from openpyxl.styles import Border, PatternFill, Side
 
 from core.constants import EXAMS_GAL_MAP, EXECUTION_DATE, SCRIPT_GENERATED_PATH
 from investigation.patient import Patient
@@ -28,7 +29,6 @@ class Report:
         self.df = pd.DataFrame(columns=self.columns)
         self.df = self.df[self.columns]
 
-        # TODO: Add a chunk cleaner for this message stack and save the indice of the last chunk in self.df
         self.__messages_stack = []
         self.__current_patient = {}
 
@@ -37,10 +37,18 @@ class Report:
             "info": "Informação de Progresso",
             "warn": "Aviso (Atenção)",
             "error": "Erro",
+            "success": "Sucesso",
         }
+        self.__importance_color_map = {
+            "debug": "FFFFFF",  # White
+            "info": "ADD8E6",  # Light Blue
+            "warn": "FFFFE0",  # Light Yellow
+            "error": "FFC0CB",  # Light Pink
+            "success": "90EE90",  # Light Green
+        }
+
         self.__reports_filename = None
 
-        # TODO: Implements a serie os stats using this controller that will be to generate a lot of stats on the end of the investigation
         self.stats = {}
 
     def set_patient(self, patient: Patient):
@@ -65,13 +73,38 @@ class Report:
         """Clean the current patient data"""
         self.__current_patient = {}
 
+    def __apply_colors(self, worksheet):
+        """Apply colors to cells in 'Categoria da Mensagem' column based on importance"""
+        thin_border = Border(
+            left=Side(style="thin"),
+            right=Side(style="thin"),
+            top=Side(style="thin"),
+            bottom=Side(style="thin"),
+        )
+
+        for row_idx, category in enumerate(self.df["Categoria da Mensagem"], start=2):
+            color = self.__importance_color_map.get(
+                next(
+                    k
+                    for k in self.__importance_map
+                    if self.__importance_map[k] == category
+                ),
+                "FFFFFF",
+            )
+            fill_pattern = PatternFill(
+                start_color=color, end_color=color, fill_type="solid"
+            )
+            cell = worksheet[f"A{row_idx}"]
+            cell.fill = fill_pattern
+            cell.border = thin_border
+
     def __export(self):
         """Export the current dataframe to an excel file if the filename is defined"""
         if self.__reports_filename is None:
             return
 
         writer = pd.ExcelWriter(
-            SCRIPT_GENERATED_PATH / self.__reports_filename, engine="xlsxwriter"
+            SCRIPT_GENERATED_PATH / self.__reports_filename, engine="openpyxl"
         )
         self.df.to_excel(writer, sheet_name="Relatório", index=False)
 
@@ -79,9 +112,11 @@ class Report:
 
         for idx, col in enumerate(self.df.columns):
             max_len = max(self.df[col].astype(str).str.len().max(), len(col)) + 2
-            worksheet.set_column(idx, idx, max_len)
+            worksheet.column_dimensions[chr(65 + idx)].width = max_len
 
-        writer.save()  # type: ignore [call-arg]
+        self.__apply_colors(worksheet)
+
+        writer.close()
 
     def generate_reports_filename(self, data: pd.DataFrame):
         """Generate the reports filename based on the date and the time of execution and release
@@ -106,7 +141,7 @@ class Report:
     def __add_message(
         self,
         message: str,
-        importance: Literal["debug", "info", "warn", "error"],
+        importance: Literal["debug", "info", "warn", "error", "success"],
         observation: str = "",
     ):
         """Low level function to add a message to the report
@@ -171,3 +206,26 @@ class Report:
             observation (str, optional): Some observation about the message. Defaults to "".
         """
         self.__add_message(message, "error", observation)
+
+    def success(self, message: str, observation: str = ""):
+        """Add a success message (Importance: Sucesso)
+
+        Args:
+            message (str): The message
+            observation (str, optional): Some observation about the message. Defaults to "".
+        """
+        self.__add_message(message, "success", observation)
+
+    def _example(self):
+        """Just for testing purposes"""
+        self.debug("Alguma coisa que o bot fez, e geralmente pode ser ignorado.")
+        self.info(
+            "Alguma decisão que o bot tomou, não atrapalha em nada, mas é bom saber que ele tomou tal decisão"
+        )
+        self.warn(
+            "Alguma decisão que que o bot tomou mais 'severas', como 'exclui' uma ficha ou indicar que alguma coisa não foi feita por algum motivo"
+        )
+        self.error(
+            "Algum erro e que precisa ser revisado, algo que impediu de alguma forma, por algum motivo, que a ficha fosse investigada"
+        )
+        self.success("Indicador claro e objetivo que a ficha foi investigada")

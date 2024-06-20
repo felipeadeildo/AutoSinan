@@ -23,6 +23,7 @@ class InvestigationBot(Bot):
         self._password = settings["sinan_credentials"]["password"]
         self._settings = settings
         self.reporter = Report()
+        # self.reporter._example()  # Just for testing purposes
 
         self._init_apps()
 
