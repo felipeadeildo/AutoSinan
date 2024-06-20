@@ -1,3 +1,4 @@
+# sinan.py
 import requests
 from bs4 import BeautifulSoup
 
@@ -14,7 +15,7 @@ display = Printter("SINAN")
 
 
 class InvestigationBot(Bot):
-    """Sinan client taht will be used to interact with the Sinan Website doing things like:
+    """Sinan client that will be used to interact with the Sinan Website doing things like:
     - Login
     - Filling out forms
     - Verifying submitted forms
@@ -73,7 +74,7 @@ class InvestigationBot(Bot):
         """
         soup = BeautifulSoup(res.content, "html.parser")
         if not soup.find("div", {"id": "detalheUsuario"}):
-            display("Falha au tentar logar. Verique as credenciais.")
+            display("Falha ao tentar logar. Verifique as credenciais.", category="erro")
             exit(1)
 
         # update the apps that use the session
@@ -83,7 +84,9 @@ class InvestigationBot(Bot):
 
     def _login(self):
         """Login to the Sinan Website"""
-        display("Fazendo login utilizando as credenciais fornecidas...")
+        display(
+            "Fazendo login utilizando as credenciais fornecidas...", category="info"
+        )
 
         # set JSESSIONID
         res = self.session.get(f"{SINAN_BASE_URL}/sinan/login/login.jsf")
@@ -92,7 +95,8 @@ class InvestigationBot(Bot):
         form = valid_tag(soup.find("form"))
         if not form:
             display(
-                "Erro: Nenhum formulário encontrado. (pode ser que o site tenha atualizado)"
+                "Erro: Nenhum formulário encontrado. (pode ser que o site tenha atualizado)",
+                category="erro",
             )
             exit(1)
 
@@ -112,7 +116,7 @@ class InvestigationBot(Bot):
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
         self.__verify_login(res)
-        display("Login efetuado com sucesso!")
+        display("Login efetuado com sucesso!", category="sucesso")
 
     def __fill_form(self, patient: Patient):
         """Fill out the form with the patient data
@@ -125,28 +129,37 @@ class InvestigationBot(Bot):
         self.reporter.set_patient(patient)
         match len(sheets):
             case 0:
-                display(f"Nenhum resultado encontrado para {patient.name}. Ignorado.")
+                display(
+                    f"Nenhum resultado encontrado para {patient.name}. Ignorado.",
+                    category="info",
+                )
                 self.reporter.warn("Paciente ignorado por não ter nenhum resultado")
             case 1:
                 display(
-                    f"Preechendo investigação do resultado encontrado para {patient.name}."
+                    f"Preechendo investigação do resultado encontrado para {patient.name}.",
+                    category="info",
                 )
                 sheet = next(iter(sheets))
                 sheet.investigate_patient()
             case _:
-                display(f"Múltiplos resultados encontrados para {patient.name}.")
+                display(
+                    f"Múltiplos resultados encontrados para {patient.name}.",
+                    category="info",
+                )
                 self.reporter.warn("Paciente tem mais de 1 resultado (duplicidade).")
                 self.duplicate_checker.investigate_multiple(patient, sheets)
 
     def start(self):
+        """Start the investigation bot process"""
         self._login()
         total = len(self.data.df)
         for i, patient in self.data.df.iterrows():
-            i += 1  # type: ignore [fé]
+            i += 1  # type: ignore
             patient = Patient(patient.to_dict())
             display(
-                f"[{i} de {total}] Preenchendo investigação do paciente {patient.name}..."
+                f"[{i} de {total}] Preenchendo investigação do paciente {patient.name}...",
+                category="info",
             )
             self.__fill_form(patient)
-            print("\n" + "*" * 25, end="\n")
+            display("\n" + "*" * 25, category="info", end="\n\n")
             # input("Pressione Enter para prosseguir para o próximo paciente.")

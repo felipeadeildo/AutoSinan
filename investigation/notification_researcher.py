@@ -137,7 +137,9 @@ class Criterias:
         )
 
         if not field_type:
-            display(f"Critério fornecido ({criteria}) não foi encontrado.")
+            display(
+                f"Critério fornecido ({criteria}) não foi encontrado.", category="erro"
+            )
             exit(1)
 
         field_type_value = field_type.get("value")
@@ -154,7 +156,7 @@ class Criterias:
         soup = BeautifulSoup(res.content, "html.parser")
         operator_options = soup.find(
             "select", {"id": "form:consulta_operador"}
-        ).find_all("option")  # type: ignore [fé]
+        ).find_all("option")  # type: ignore
         operators = {tag.get_text(): tag.get("value") for tag in operator_options}
         return field_type_value, operators
 
@@ -238,14 +240,14 @@ class NotificationResearcher(Criterias):
         return res
 
     def __define_javax_faces(self):
-        """Loads ednpoint page and extract the javax.faces.ViewState this session"""
+        """Loads endpoint page and extract the javax.faces.ViewState this session"""
         res = self.session.get(self.endpoint)
         self.soup = BeautifulSoup(res.content, "html.parser")
         javax_faces = valid_tag(
             self.soup.find("input", {"name": "javax.faces.ViewState"})
         )
         if not javax_faces:
-            display("Erro: Token de estado de visualização não encontrado.")
+            display("Token de estado de visualização não encontrado.", category="erro")
             exit(1)
 
         self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
@@ -253,7 +255,7 @@ class NotificationResearcher(Criterias):
     def __check_mother_names(
         self, results: list[Sheet], strategy: Literal["equal", "contains"] = "equal"
     ):
-        """Filter the results by mother name usign the comparator "equal"
+        """Filter the results by mother name using the comparator "equal"
 
         Args:
             results (list[Sheet]): The list of results to be filtered
@@ -265,14 +267,13 @@ class NotificationResearcher(Criterias):
             in x.mother_name.lower(),
         }
 
-        # return filter(strategies[strategy], results)
         _results = []
         for result in results:
             if strategies[strategy](result):
                 _results.append(result)
             else:
                 self.reporter.debug(
-                    "Resultado com será ignorado pelo critério de nome de mãe.",
+                    "Resultado será ignorado pelo critério de nome de mãe.",
                     f"Nº da Notificação: {result.notification_number} | Estratégia Utilizada: {strategy}",
                 )
 
@@ -298,7 +299,8 @@ class NotificationResearcher(Criterias):
         if use_notification_number:
             if pd.isna(patient.notification_number):
                 display(
-                    "Este paciente não possui número de notificação para que seja utilizada na pesquisa."
+                    "Este paciente não possui número de notificação para que seja utilizada na pesquisa.",
+                    category="info",
                 )
                 self.reporter.warn(
                     "Exame sem número de notificação. Pesquisa abortada."
@@ -325,7 +327,8 @@ class NotificationResearcher(Criterias):
 
         if results_count == 0 and not use_notification_number:
             display(
-                f"Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
+                f"Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora.",
+                category="info",
             )
             self.reporter.warn(
                 "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
@@ -337,7 +340,8 @@ class NotificationResearcher(Criterias):
 
         if results_count > 1:
             display(
-                f"Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação."
+                f"Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação.",
+                category="info",
             )
             self.reporter.warn(
                 "Paciente tem mais de 1 resultado de notificação. Verificando nome da mãe de cada notificação."
@@ -345,7 +349,7 @@ class NotificationResearcher(Criterias):
             results = self.__check_mother_names(results)
 
         display(
-            f"Paciente pesquisado ({patient.name}) finalizou a pesquisa em {elapsed_time:.2f} segundos. {results_count} notificações consideradas.",
+            f"Paciente pesquisado ({patient.name}) finalizou a pesquisa em {elapsed_time:.2f} segundos. {results_count} notificações consideradas."
         )
         self.reporter.debug(
             f"Pesquisa feita em {elapsed_time:.2f} segundos. {results_count} notificações consideradas."
@@ -367,7 +371,6 @@ class NotificationResearcher(Criterias):
         thead = valid_tag(soup.find("thead", {"class": "rich-table-thead"}))
         tbody = valid_tag(soup.find("tbody", {"id": "form:tabelaResultadoPesquisa:tb"}))
 
-        # not all([thead, tbody, reult_tag]):
         if not (thead and tbody and reult_tag):
             return []
 
@@ -378,7 +381,6 @@ class NotificationResearcher(Criterias):
             row_values = [td.text.strip() for td in row.find_all("td")]
             value = dict(zip(column_names, row_values))
             payload = self.base_payload.copy()
-            # keys2remove = ["AJAXREQUEST"]
 
             payload.update(
                 {

@@ -49,7 +49,21 @@ class Report:
 
         self.__reports_filename = None
 
-        self.stats = {}
+        self.stats = {
+            "total_patients": 0,
+            "total_errors": 0,
+            "total_notifications": 0,
+            "total_duplicates": 0,
+            "total_oportunity": 0,
+            "total_non_oportunity": 0,
+            "total_investigated": 0,
+            "total_warns": 0,
+            "average_search_time": 0,
+            "average_fill_time": 0,
+            "average_investigation_time": 0,
+            "average_notifications_found": 0,
+            "average_notification_attempts": 0,
+        }
 
     def set_patient(self, patient: Patient):
         """Set the current patient that the report will be about

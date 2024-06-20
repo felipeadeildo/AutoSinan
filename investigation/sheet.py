@@ -557,7 +557,7 @@ class Sheet(Properties):
             )
 
         modal_id = modal_id_match.group(1)
-        modal_text = soup.find("div", {"id": modal_id}).get_text(strip=True)  # type: ignore [fé]
+        modal_text = soup.find("div", {"id": modal_id}).get_text(strip=True)  # type: ignore
 
         self.reporter.info(f"Texto do popUp {depth}: {modal_text}")
 
@@ -752,8 +752,6 @@ class Sheet(Properties):
             40, 42, 46 - Resultado,
             47 - Sorotipo
         """
-
-        # TODO: define setters for collection date keys and collection result keys for each exam type
 
         if self.patient.exam_type == "PCR":
             sinan_collection_date_key = "form:dengue_dataColetaRTPCRInputDate"
