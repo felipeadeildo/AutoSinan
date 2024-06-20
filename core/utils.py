@@ -281,3 +281,20 @@ def get_form_data(
     return {
         k: v for k, v in data.items() if k and not k.startswith(not_include_starts_with)
     }
+
+
+class Printter:
+    """
+    Custom print function
+    """
+
+    def __init__(self, app: str):
+        self.app = app
+        self.default_print = print
+
+    def __call__(self, message: str, category: str = "", *args, **kwargs):
+        self.default_print(
+            f"[{self.app}{': ' if category else ''}{category.upper()}] {message}",
+            *args,
+            **kwargs,
+        )

@@ -16,11 +16,13 @@ from core.constants import (
     TODAY,
     TODAY_FORMATTED,
 )
-from core.utils import get_form_data, valid_tag
+from core.utils import Printter, get_form_data, valid_tag
 from investigation.patient import Patient
 from investigation.report import Report
 
 POSSIBLE_POSITIONS = Literal["results", "notification", "investigation"]
+
+display = Printter("FICHA")
 
 
 class Properties:
@@ -37,32 +39,48 @@ class Properties:
 
     @property
     def first_symptoms_date(self) -> datetime:
-        """Date of the first symptoms (object)"""
+        """Date of the first symptoms (object)
+
+        Returns:
+            datetime: Date of the first symptoms
+        """
         return datetime.strptime(
             self.notification_form_data["form:dtPrimeirosSintomasInputDate"], "%d/%m/%Y"
         )
 
     @property
     def f_first_symptoms_date(self) -> str:
-        """Formatted date of the first symptoms (dd/mm/YYYY)"""
+        """Formatted date of the first symptoms (dd/mm/YYYY)
+
+        Returns:
+            str: Formatted date of the first symptoms
+        """
         return self.first_symptoms_date.strftime("%d/%m/%Y")
 
     @property
     def is_investigation_sheet_enabled(self) -> bool:
-        """Check if the investigation tab is enabled"""
+        """Check if the investigation tab is enabled
+
+        Returns:
+            bool: True if the investigation tab is enabled, False otherwise
+        """
         investigation_tab = valid_tag(
             self.notification_soup.find(attrs={"id": "form:tabInvestigacao_lbl"})
         )
 
         if not investigation_tab:
-            print("[NOTIFICAÇÃO] Erro: Aba de investigação não foi encontrada.")
+            display("Erro: Aba de investigação não foi encontrada.", category="erro")
             raise FileNotFoundError
 
         return "rich-tab-disabled" not in (investigation_tab.get("class") or [])
 
     @property
     def javax_view_state(self) -> str:
-        """Get the `javax.faces.ViewState` from the `notification_soup`"""
+        """Get the `javax.faces.ViewState` from the `notification_soup`
+
+        Returns:
+            str: The value of `javax.faces.ViewState`
+        """
         tag = valid_tag(
             self.notification_soup.find(attrs={"name": "javax.faces.ViewState"})
         )
@@ -74,14 +92,29 @@ class Properties:
 
     @property
     def dengue_classification(self) -> str:
+        """Get the dengue classification from the investigation form data
+
+        Returns:
+            str: The dengue classification
+        """
         return self.investigation_form_data["form:dengue_classificacao"]
 
     @property
     def f_dengue_classification(self):
+        """Get the friendly name of the dengue classification
+
+        Returns:
+            str: The friendly name of the dengue classification
+        """
         return CLASSIFICATION_FRIENDLY_MAP[self.dengue_classification]
 
     @property
     def exam_results(self) -> Mapping[POSSIBLE_EXAM_TYPES, str | None]:
+        """Get the exam results from the investigation form data
+
+        Returns:
+            Mapping[POSSIBLE_EXAM_TYPES, str | None]: The exam results
+        """
         return {
             "IgM": self.investigation_form_data["form:dengue_resultadoExameSorologico"],
             "NS1": self.investigation_form_data["form:dengue_resultadoNS1"],
@@ -90,7 +123,11 @@ class Properties:
 
     @property
     def classifications(self):
-        """List of classifications on Sinan based on the exam results (it doenst include the 11 and 12 classification because its defined by a human.)"""
+        """List of classifications on Sinan based on the exam results (it doesn't include the 11 and 12 classification because it's defined by a human.)
+
+        Returns:
+            list: The classifications based on the exam results
+        """
         classifications = []
         for exam_type, result in self.exam_results.items():
             possible_classifications = CLASSSIFICATION_MAP[exam_type]
@@ -112,26 +149,56 @@ class Properties:
 
     @property
     def f_closing_date(self) -> str:
+        """Get the formatted closing date from the investigation form data
+
+        Returns:
+            str: The formatted closing date
+        """
         return self.investigation_form_data["form:dengue_dataEncerramentoInputDate"]
 
     @property
     def closing_date(self):
+        """Get the closing date as a datetime object
+
+        Returns:
+            datetime: The closing date
+        """
         return datetime.strptime(self.f_closing_date, "%d/%m/%Y")
 
     @property
     def f_notification_date(self):
+        """Get the formatted notification date from the notification form data
+
+        Returns:
+            str: The formatted notification date
+        """
         return self.notification_form_data["form:dtNotificacaoInputDate"]
 
     @property
     def notification_date(self):
+        """Get the notification date as a datetime object
+
+        Returns:
+            datetime: The notification date
+        """
         return datetime.strptime(self.f_notification_date, "%d/%m/%Y")
 
     @property
     def notification_number(self) -> str:
+        """Get the notification number from the notification form data
+
+        Returns:
+            str: The notification number
+        """
         return self.notification_form_data["form:nuNotificacao"]
 
     @property
     def position(self):
+        """Get the current position in the workflow
+
+        Returns:
+            POSSIBLE_POSITIONS: The current position
+        """
         return self.positions_history[-1]
 
     @position.setter
@@ -140,21 +207,29 @@ class Properties:
 
     @property
     def positions_history(self) -> list[POSSIBLE_POSITIONS]:
+        """Get the history of positions in the workflow
+
+        Returns:
+            list[POSSIBLE_POSITIONS]: The history of positions
+        """
         return getattr(self, "_positions_history", ["results"])
 
     @property
     def priority(self) -> int:
+        """Get the priority of the patient based on the dengue classification
+
+        Returns:
+            int: The priority
+        """
         priority_queue = []
         if self.dengue_classification in ("11", "12"):
             priority_queue.append(
                 PRIORITY_CLASSIFICATION_MAP[self.dengue_classification]
             )
 
-        # if have at least one classification as "10"
         if any(map(lambda k: k == "10", self.classifications)):
             priority_queue.append(PRIORITY_CLASSIFICATION_MAP["10"])
 
-        # if have at least one classification as "5", so added the priority of 5
         if any(map(lambda k: k == "5", self.classifications)):
             priority_queue.append(PRIORITY_CLASSIFICATION_MAP["5"])
 
@@ -162,15 +237,24 @@ class Properties:
 
     @property
     def mother_name(self) -> str:
-        """The mother name on the notification sheet"""
+        """Get the mother's name from the notification form data
+
+        Returns:
+            str: The mother's name
+        """
         return self.notification_form_data["form:notificacao_nome_mae"]
 
     @property
     def is_oportunity(self) -> bool:
-        """Check if the patient is oportunity to be investigated"""
+        """Check if the patient is an opportunity to be investigated
+
+        Returns:
+            bool: True if the patient is an opportunity, False otherwise
+        """
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se o paciente é oportuno, é preciso ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para verificar se o paciente é oportuno, é preciso ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return False
 
@@ -216,15 +300,26 @@ class Properties:
 
     @property
     def municipality_of_residence(self) -> str:
+        """Get the municipality of residence from the notification form data
+
+        Returns:
+            str: The municipality of residence
+        """
         return self.notification_form_data[
             "form:notificacao_paciente_endereco_municipio_noMunicipiocomboboxField"
         ]
 
     @property
     def save_button_exists(self) -> bool:
+        """Check if the save button exists on the notification form
+
+        Returns:
+            bool: True if the save button exists, False otherwise
+        """
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return False
 
@@ -234,10 +329,15 @@ class Properties:
 
     @property
     def is_return_flow(self) -> bool:
-        """Patient was notified by this municipality but his residence is outside the municipality"""
+        """Check if the patient was notified by this municipality but resides outside the municipality
+
+        Returns:
+            bool: True if the patient was notified by this municipality but resides outside, False otherwise
+        """
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return False
 
@@ -260,10 +360,15 @@ class Properties:
 
     @property
     def is_notified_by_another_municipality(self) -> bool:
-        """The patient is municipality's resident but was notified by another municipality"""
+        """Check if the patient is a resident of the municipality but was notified by another municipality
+
+        Returns:
+            bool: True if the patient is a resident but notified by another municipality, False otherwise
+        """
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return False
 
@@ -287,10 +392,15 @@ class Properties:
 
     @property
     def is_extra_case(self) -> bool:
-        """This is a test case that can be removed later"""
+        """Check if this is an extra test case
+
+        Returns:
+            bool: True if this is an extra test case, False otherwise
+        """
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para verificar se a ficha foi encerrado pelo município, é preciso ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para verificar se a ficha foi encerrada pelo município, é preciso ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return False
 
@@ -311,10 +421,20 @@ class Properties:
 
     @property
     def result_municipality_notified(self) -> str:
+        """Get the municipality that notified the patient
+
+        Returns:
+            str: The municipality that notified the patient
+        """
         return self.search_result_data["Município Not."]
 
     @property
     def result_municipality_residence(self) -> str:
+        """Get the municipality of residence of the patient
+
+        Returns:
+            str: The municipality of residence of the patient
+        """
         return self.search_result_data["Município Res."]
 
 
@@ -333,6 +453,16 @@ class Sheet(Properties):
         open_payload: dict,
         reporter: Report,
     ):
+        """Initialize the Sheet
+
+        Args:
+            session (Session): The session object
+            municipality (POSSIBLE_MUNICIPALITIES): The municipality
+            patient (Patient): The patient object
+            search_result_data (dict): The search result data
+            open_payload (dict): The payload to open the notification sheet
+            reporter (Report): The report object
+        """
         self.session = session
         self.municipality = municipality
         self.patient = patient
@@ -351,10 +481,11 @@ class Sheet(Properties):
         self.return_to_results_page()
 
     def __open_notification_sheet(self):
-        """Open the notification sheed using the `open_payload`"""
+        """Open the notification sheet using the `open_payload`"""
         if self.position != "results":
-            print(
-                "[ERRO] Para abrir a notificação, é necessário estar na aba de resultados."
+            display(
+                "Para abrir a notificação, é necessário estar na aba de resultados.",
+                category="erro",
             )
             return
 
@@ -367,8 +498,9 @@ class Sheet(Properties):
     def __loads_notification_form_data(self):
         """Given the `notification_soup` loads the notification form data as a dict"""
         if "notification" not in self.positions_history:
-            print(
-                "[ERRO] Para carregar o formulário de notificação se faz necessário ter passado pela aba de notificação ao menos uma vez."
+            display(
+                "Para carregar o formulário de notificação se faz necessário ter passado pela aba de notificação ao menos uma vez.",
+                category="erro",
             )
             return
 
@@ -380,8 +512,9 @@ class Sheet(Properties):
     def __loads_investigation_form_data(self):
         """Given the `investigation_soup` loads the investigation form data as a dict"""
         if "investigation" not in self.positions_history:
-            print(
-                "[ERRO] Para carregar o formulário de investigação se faz necessário ter passado pela aba de investigação ao menos uma vez."
+            display(
+                "Para carregar o formulário de investigação se faz necessário ter passado pela aba de investigação ao menos uma vez.",
+                category="erro",
             )
             return
         self.investigation_form_data = get_form_data(self.investigation_soup)
@@ -390,7 +523,7 @@ class Sheet(Properties):
         )
 
     def __click_popup_ok(self, depth: int):
-        """ "Click" in "Ok" buttom if modal appears in the response"""
+        """ "Click" in "Ok" button if modal appears in the response"""
         soup = self.investigation_soup
 
         show_modal_script = next(
@@ -435,19 +568,27 @@ class Sheet(Properties):
             k: v for k, v in payload_modal_ok.items() if "ok" in v.lower()
         }
 
-        print("[INVESTIGAÇÃO] Clicando em 'Ok' para continuar.", end=" ")
+        display("Clicando em 'Ok' para continuar.", category="investigação")
         res = self.session.post(
             self.master_endpoint,
             data={**self.notification_form_data, **payload_modal_ok},
         )
 
         self.investigation_soup = BeautifulSoup(res.content, "html.parser")
-        print("Ok!")
+        display("Ok!", category="investigação")
 
         self.__verify_investigation_sheet(depth + 1)
 
     def __verify_investigation_sheet(self, depth: int = 1, retry: bool = True) -> bool:
-        """Verify if the `investigation_soup` is really the investigation page or a different page"""
+        """Verify if the `investigation_soup` is really the investigation page or a different page
+
+        Args:
+            depth (int, optional): The depth of the verification. Defaults to 1.
+            retry (bool, optional): Whether to retry the verification if it fails. Defaults to True.
+
+        Returns:
+            bool: True if the investigation sheet is verified, False otherwise
+        """
         first_investigation_input = valid_tag(
             self.investigation_soup.find(attrs={"id": "form:dtInvestigacaoInputDate"})
         )
@@ -486,7 +627,7 @@ class Sheet(Properties):
         )
 
     def __enable_investigation_sheet(self):
-        """Try to enable the investigation tab "clicking" in "Salvar" and "Ok" buttons"""
+        """Try to enable the investigation tab by "clicking" on "Salvar" and "Ok" buttons"""
 
         self.__update_notification_form_data_javascript_rendering()
 
@@ -519,8 +660,9 @@ class Sheet(Properties):
             error_filename = f"error_{self.patient.name}.html"
             with open(error_filename, "wb") as f:
                 f.write(res.content)
-            print(
-                "[ERRO] Falha ao carregar a aba de investigação. Erro precisa ser tratado pelo programador."
+            display(
+                "Falha ao carregar a aba de investigação. Erro precisa ser tratado pelo programador.",
+                category="erro",
             )
             self.reporter.error(
                 "Falha ao carregar a aba de investigação.",
@@ -530,8 +672,9 @@ class Sheet(Properties):
     def __open_investigation_sheet(self):
         """Open investigation sheet enabling the investigation tab if it is disabled"""
         if self.position != "results":
-            print(
-                "[ERRO] Para abrir a aba de investigação, é preciso estar na aba de resultados (resultado -> notificação -> investigação)."
+            display(
+                "Para abrir a aba de investigação, é preciso estar na aba de resultados (resultado -> notificação -> investigação).",
+                category="erro",
             )
             return
 
@@ -551,7 +694,14 @@ class Sheet(Properties):
         self.__loads_investigation_form_data()
 
     def __get_errors(self, response: Response) -> list[str]:
-        """Get the error messages from the response"""
+        """Get the error messages from the response
+
+        Args:
+            response (Response): The response from the server
+
+        Returns:
+            list[str]: The list of error messages
+        """
         soup = BeautifulSoup(response.content, "html.parser")
         error_tags = soup.find_all("li", {"class": "error"})
 
@@ -559,7 +709,6 @@ class Sheet(Properties):
 
     def __save_investigation(self):
         """Save the investigation filled form"""
-
         res = self.session.post(
             self.master_endpoint,
             data={
@@ -572,9 +721,18 @@ class Sheet(Properties):
         has_errors = self.__log_errors(res, "salvar a investigação")
 
         if not has_errors:
-            print("Ok!")
+            display("Ok!", category="investigação")
 
     def __log_errors(self, response: Response, doing: str):
+        """Log errors from the response
+
+        Args:
+            response (Response): The response from the server
+            doing (str): The action being performed
+
+        Returns:
+            bool: True if there are errors, False otherwise
+        """
         errors = self.__get_errors(response)
         if errors:
             errors_txt = "\n".join(errors)
@@ -582,7 +740,7 @@ class Sheet(Properties):
                 f"Erro ao tentar {doing} (ver observações)",
                 errors_txt,
             )
-            print(f"\tMensagem do Site: '{errors_txt}'")
+            display(f"Mensagem do Site: '{errors_txt}'", category="erro")
 
         return bool(errors)
 
@@ -670,8 +828,9 @@ class Sheet(Properties):
             )
             self.__log_errors(res, "preencher resultado do exame")
 
-        print(
-            f"[PREENCHIMENTO] Definindo resultado para exame tipo {self.patient.exam_type} com data de coleta {self.patient.f_collection_date}."
+        display(
+            f"Definindo resultado para exame tipo {self.patient.exam_type} com data de coleta {self.patient.f_collection_date}.",
+            category="preenchimento",
         )
 
     def __fill_investigation_date(self):
@@ -728,18 +887,20 @@ class Sheet(Properties):
         )
 
     def __fill_criteria(self):
-        """Select the confirmation criteria (63 - Critério de Confirmação)"""
+        """Select the confirmation criteria (63 - Critério de Confirmação)"""
         self.investigation_form_data.update({"form:dengue_criterio": "1"})
         res = self.session.post(
             self.master_endpoint,
             data={**self.investigation_form_data, "form:j_id718": "form:j_id718"},
         )
-        self.__log_errors(res, "preencher critério de confirmação")
+        self.__log_errors(res, "preencher critério de confirmação")
 
     def __fill_closing_date(self):
+        """Fill the closing date based on the dengue classification"""
         if not self.dengue_classification:
-            print(
-                "[PREENCHIMENTO] Como nenhuma classificação foi definda a data de encerramento será ignorada."
+            display(
+                "Como nenhuma classificação foi definida a data de encerramento será ignorada.",
+                category="preenchimento",
             )
             return
 
@@ -752,8 +913,9 @@ class Sheet(Properties):
                     f"Data de encerramento do sinan ({self.f_closing_date}) é menor que a data de coleta ({self.patient.f_collection_date}). Portanto a data de encerramento será definida para a data que está no site: {self.f_closing_date}."
                 )
         elif self.dengue_classification in ("11", "12"):
-            print(
-                f"Como a classificação já foi selecionada como {self.f_dengue_classification}. A data de encerramento não será definida."
+            display(
+                f"Como a classificação já foi selecionada como {self.f_dengue_classification}. A data de encerramento não será definida.",
+                category="preenchimento",
             )
             self.reporter.warn(
                 f"Como a classificação já foi selecionada como {self.f_dengue_classification}. A data de encerramento não será definida."
@@ -773,7 +935,7 @@ class Sheet(Properties):
         self.__log_errors(res, "preencher data de encerramento")
 
     def __fill_clinical_signs(self):
-        """Select the clinical signs (33 - Sinais Clinicos)"""
+        """Select the clinical signs (33 - Sinais Clínicos)"""
         self.investigation_form_data.update(
             {
                 k: ((v or "2") if not self.has_previous_investigation else "2")
@@ -785,7 +947,7 @@ class Sheet(Properties):
         )
 
     def __fill_illnesses(self):
-        """Select the illnesses (34 - Doencas Pré-existentes)"""
+        """Select the illnesses (34 - Doenças Pré-existentes)"""
         self.investigation_form_data.update(
             {
                 k: ((v or "2") if not self.has_previous_investigation else "2")
@@ -815,7 +977,6 @@ class Sheet(Properties):
 
     def delete(self):
         """Delete the notification sheet"""
-
         self.__open_notification_sheet()
 
         res = self.session.post(
@@ -833,10 +994,11 @@ class Sheet(Properties):
         )
 
     def return_to_results_page(self):
-        """Reset the javax.viewState returning to the results page allowing to open anothers sheets"""
+        """Reset the javax.viewState returning to the results page allowing to open other sheets"""
         if self.position != "notification":
-            print(
-                "[ERRO] Para voltar à página de resultados, é necessário estar na aba de notificação."
+            display(
+                "Para voltar à página de resultados, é necessário estar na aba de notificação.",
+                category="erro",
             )
             return
         self.session.post(

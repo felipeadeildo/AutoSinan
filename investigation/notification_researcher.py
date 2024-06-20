@@ -11,10 +11,12 @@ from core.constants import (
     SEARCH_POSSIBLE_CRITERIAS,
     SINAN_BASE_URL,
 )
-from core.utils import generate_search_base_payload, valid_tag
+from core.utils import Printter, generate_search_base_payload, valid_tag
 from investigation.patient import Patient
 from investigation.report import Report
 from investigation.sheet import Sheet
+
+display = Printter("PESQUISA")
 
 
 class Criterias:
@@ -135,7 +137,7 @@ class Criterias:
         )
 
         if not field_type:
-            print(f"Critério fornecido ({criteria}) não foi encontrado.")
+            display(f"Critério fornecido ({criteria}) não foi encontrado.")
             exit(1)
 
         field_type_value = field_type.get("value")
@@ -243,7 +245,7 @@ class NotificationResearcher(Criterias):
             self.soup.find("input", {"name": "javax.faces.ViewState"})
         )
         if not javax_faces:
-            print("[PESQUISA] Erro: Token de estado de visualização não encontrado.")
+            display("Erro: Token de estado de visualização não encontrado.")
             exit(1)
 
         self.base_payload["javax.faces.ViewState"] = javax_faces.get("value")  # type: ignore
@@ -288,15 +290,15 @@ class NotificationResearcher(Criterias):
         start_time = time.time()
         self.patient = patient
         self.reporter.set_patient(patient)
-        print(f"[PESQUISA] Pesquisando pelo paciente {patient.name}")
+        display(f"Pesquisando pelo paciente {patient.name}")
         self.__define_javax_faces()
         self.__select_agravo()
 
         criterias: list[SEARCH_POSSIBLE_CRITERIAS] = []
         if use_notification_number:
             if pd.isna(patient.notification_number):
-                print(
-                    "[PESQUISA] Este paciente não possui número de notificação para que seja utilizada na pesquisa."
+                display(
+                    "Este paciente não possui número de notificação para que seja utilizada na pesquisa."
                 )
                 self.reporter.warn(
                     "Exame sem número de notificação. Pesquisa abortada."
@@ -322,8 +324,8 @@ class NotificationResearcher(Criterias):
         results_count = len(results)
 
         if results_count == 0 and not use_notification_number:
-            print(
-                f"[PESQUISA] Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
+            display(
+                f"Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora."
             )
             self.reporter.warn(
                 "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
@@ -334,16 +336,16 @@ class NotificationResearcher(Criterias):
         elapsed_time = end_time - start_time
 
         if results_count > 1:
-            print(
-                f"[PESQUISA] Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação."
+            display(
+                f"Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação."
             )
             self.reporter.warn(
                 "Paciente tem mais de 1 resultado de notificação. Verificando nome da mãe de cada notificação."
             )
             results = self.__check_mother_names(results)
 
-        print(
-            f"[PESQUISA] Paciente pesquisado ({patient.name}) finalizou a pesquisa em {elapsed_time:.2f} segundos. {results_count} notificações consideradas.",
+        display(
+            f"Paciente pesquisado ({patient.name}) finalizou a pesquisa em {elapsed_time:.2f} segundos. {results_count} notificações consideradas.",
         )
         self.reporter.debug(
             f"Pesquisa feita em {elapsed_time:.2f} segundos. {results_count} notificações consideradas."
