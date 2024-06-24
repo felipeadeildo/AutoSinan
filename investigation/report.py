@@ -1,10 +1,16 @@
+import json
 from datetime import datetime
 from typing import Literal, Union
 
 import pandas as pd
 from openpyxl.styles import Border, PatternFill, Side
 
-from core.constants import EXAMS_GAL_MAP, EXECUTION_DATE, SCRIPT_GENERATED_PATH
+from core.constants import (
+    EXAMS_GAL_MAP,
+    EXECUTION_DATE,
+    SCRIPT_GENERATED_PATH,
+    UNIVERSAL_STATS_FILE_PATH,
+)
 from investigation.patient import Patient
 
 
@@ -301,3 +307,10 @@ class Report:
         """Update the stats dataframe"""
         for key, value in self.stats_translated.items():
             self.df_stats.loc[value] = self.stats[key]
+
+        with UNIVERSAL_STATS_FILE_PATH.open(
+            "w", encoding="utf-8"
+        ) as writter, UNIVERSAL_STATS_FILE_PATH.open("r", encoding="utf-8") as reader:
+            universal_stats = json.load(reader)
+            universal_stats[self.__reports_filename] = self.stats
+            json.dump(universal_stats, writter, indent=4, ensure_ascii=False)

@@ -123,6 +123,9 @@ SCRIPT_GENERATED_PATH = Path("script")
 
 SCRIPT_GENERATED_PATH.mkdir(exist_ok=True)
 
+UNIVERSAL_STATS_FILE_PATH = SCRIPT_GENERATED_PATH / "stats.json"
+"""The path to save the universal statistics where will be saved the stats between executions."""
+
 
 SEARCH_POSSIBLE_CRITERIAS = Literal[
     "Nome do paciente",
