@@ -117,7 +117,7 @@ class DuplicateChecker:
         if patient.exam_type == "IgM":
             if patient.exam_result == "Não Reagente":
                 # TODO: 90 days before the collection date (????, idk)
-                self.reporter.info(
+                self.reporter.warn(
                     "O exame é do tipo IgM e o resultado é Não Reganete, portanto todos epsódios serão encerrados como decartados (se não houver classificação prévia).",
                     f"Quantidade de epsódios encontrados: {len(episodes)}",
                 )
@@ -125,7 +125,7 @@ class DuplicateChecker:
                     for sheet in episode:
                         sheet.investigate_patient()
             else:
-                self.reporter.info(
+                self.reporter.warn(
                     f"O exame é do tipo IgM e o resultado é {patient.exam_result}, portanto somente o último epsódio será encerrado deixando os demais em branco.",
                     f"Quantidade de epsódios encontrados: {len(episodes)}",
                 )

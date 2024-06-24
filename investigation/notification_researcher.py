@@ -1,5 +1,5 @@
 import time
-from typing import Callable, Literal, Mapping
+from typing import Callable, Literal, Mapping, Optional
 
 import pandas as pd
 import requests
@@ -272,23 +272,29 @@ class NotificationResearcher(Criterias):
             if strategies[strategy](result):
                 _results.append(result)
             else:
-                self.reporter.debug(
+                self.reporter.warn(
                     "Resultado será ignorado pelo critério de nome de mãe.",
                     f"Nº da Notificação: {result.notification_number} | Estratégia Utilizada: {strategy}",
                 )
 
         return _results
 
-    def search(self, patient: Patient, use_notification_number: bool = False):
+    def search(
+        self,
+        patient: Patient,
+        use_notification_number: bool = False,
+        start_time: Optional[float] = None,
+    ):
         """Search for a patient in the Sinan website (Consultar Notificação)
 
         Args:
             patient (Patient): The patient data from GAL to search
+            start_time (Optional[float], optional): The start time of the search. Defaults to None.
 
         Returns:
             list[Sheet]: A list of results with objects to interact with.
         """
-        start_time = time.time()
+        start_time = start_time or time.time()
         self.patient = patient
         self.reporter.set_patient(patient)
         display(f"Pesquisando pelo paciente {patient.name}")
@@ -330,10 +336,12 @@ class NotificationResearcher(Criterias):
                 f"Utilizando os critérios {tuple(criterias)} não foram encontrados resultados para o paciente {patient.name}. Pesquisando pelo número de notificação agora.",
                 category="info",
             )
-            self.reporter.warn(
+            self.reporter.info(
                 "Nenhuma notificação encontrada. Será feita uma nova pesquisa utilizando o número de notificação"
             )
-            return self.search(patient, use_notification_number=True)
+            return self.search(
+                patient, use_notification_number=True, start_time=start_time
+            )
 
         end_time = time.time()
         elapsed_time = end_time - start_time
@@ -343,7 +351,7 @@ class NotificationResearcher(Criterias):
                 f"Mais de um resultado encontrado ao pesquisar pelo paciente {patient.name}. Avaliando nome da mãe de cada notificação.",
                 category="info",
             )
-            self.reporter.warn(
+            self.reporter.info(
                 "Paciente tem mais de 1 resultado de notificação. Verificando nome da mãe de cada notificação."
             )
             results = self.__check_mother_names(results)
@@ -354,6 +362,7 @@ class NotificationResearcher(Criterias):
         self.reporter.debug(
             f"Pesquisa feita em {elapsed_time:.2f} segundos. {results_count} notificações consideradas."
         )
+        self.reporter.increment_stat("search_time", elapsed_time)
         self.reporter.clean_patient()
         return results
 
@@ -396,9 +405,12 @@ class NotificationResearcher(Criterias):
                 payload,
                 self.reporter,
             )
-
+            self.reporter.increment_stat("notifications")
             if sheet.is_oportunity:
                 sheets.append(sheet)
+                self.reporter.increment_stat("oportunity")
+            else:
+                self.reporter.increment_stat("not_oportunity")
 
         if any(
             sheet.result_municipality_notified != sheet.result_municipality_residence

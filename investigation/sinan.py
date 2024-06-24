@@ -124,6 +124,7 @@ class InvestigationBot(Bot):
         Args:
             patient (Patient): The patient data
         """
+        self.reporter.increment_stat("patients")
         sheets = self.researcher.search(patient)
 
         self.reporter.set_patient(patient)
@@ -133,7 +134,8 @@ class InvestigationBot(Bot):
                     f"Nenhum resultado encontrado para {patient.name}. Ignorado.",
                     category="info",
                 )
-                self.reporter.warn("Paciente ignorado por não ter nenhum resultado")
+                self.reporter.warn("Paciente ignorado por não ter nenhum resultado.")
+                self.reporter.increment_stat("patients_not_found")
             case 1:
                 display(
                     f"Preechendo investigação do resultado encontrado para {patient.name}.",
@@ -147,6 +149,7 @@ class InvestigationBot(Bot):
                     category="info",
                 )
                 self.reporter.warn("Paciente tem mais de 1 resultado (duplicidade).")
+                self.reporter.increment_stat("duplicates")
                 self.duplicate_checker.investigate_multiple(patient, sheets)
 
     def start(self):

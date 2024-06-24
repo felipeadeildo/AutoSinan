@@ -1,4 +1,5 @@
 import re
+import time
 from datetime import datetime, timedelta
 from typing import Literal, Mapping
 
@@ -683,7 +684,7 @@ class Sheet(Properties):
         self.has_previous_investigation = self.is_investigation_sheet_enabled
 
         if not self.is_investigation_sheet_enabled:
-            self.reporter.warn(
+            self.reporter.info(
                 "Aba de investigação não está habilitada. Habilitando..."
             )
             self.__enable_investigation_sheet()
@@ -707,8 +708,12 @@ class Sheet(Properties):
 
         return [error.get_text() for error in error_tags if error.get_text()]
 
-    def __save_investigation(self):
-        """Save the investigation filled form"""
+    def __save_investigation(self) -> bool:
+        """Save the investigation filled form
+
+        Returns:
+            bool: True if there are errors, False otherwise
+        """
         res = self.session.post(
             self.master_endpoint,
             data={
@@ -719,9 +724,7 @@ class Sheet(Properties):
             },
         )
         has_errors = self.__log_errors(res, "salvar a investigação")
-
-        if not has_errors:
-            display("Ok!", category="investigação")
+        return has_errors
 
     def __log_errors(self, response: Response, doing: str):
         """Log errors from the response
@@ -956,6 +959,7 @@ class Sheet(Properties):
 
     def investigate_patient(self):
         """Open the investigation sheet page and fill the investigation form with the classification and the patient data"""
+        start_time = time.time()
         self.__open_investigation_sheet()
 
         form_builders = [
@@ -971,7 +975,15 @@ class Sheet(Properties):
         for form_builder in form_builders:
             form_builder()
 
-        self.__save_investigation()
+        has_errors = self.__save_investigation()
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        if not has_errors:
+            display("Ok!", category="investigação")
+            self.reporter.increment_stat("investigated")
+
+        self.reporter.increment_stat("investigation_time", elapsed_time)
 
     def delete(self):
         """Delete the notification sheet"""

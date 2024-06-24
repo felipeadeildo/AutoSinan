@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Union
 
 import pandas as pd
 from openpyxl.styles import Border, PatternFill, Side
@@ -50,20 +50,43 @@ class Report:
         self.__reports_filename = None
 
         self.stats = {
-            "total_patients": 0,
-            "total_errors": 0,
-            "total_notifications": 0,
-            "total_duplicates": 0,
-            "total_oportunity": 0,
-            "total_non_oportunity": 0,
-            "total_investigated": 0,
-            "total_warns": 0,
-            "average_search_time": 0,
-            "average_fill_time": 0,
-            "average_investigation_time": 0,
-            "average_notifications_found": 0,
-            "average_notification_attempts": 0,
+            "patients": 0,
+            "errors": 0,
+            "notifications": 0,
+            "patients_not_found": 0,
+            "duplicates": 0,
+            "oportunity": 0,
+            "not_oportunity": 0,
+            "investigated": 0,
+            "warnings": 0,
+            "search_time": 0.0,
+            "investigation_time": 0.0,
+            "average_search_time": 0.0,
+            "average_investigation_time": 0.0,
+            "average_notifications_found": 0.0,
         }
+
+        self.stats_translated = {
+            "patients": "Quantidade Total de Pacientes",
+            "errors": "Quantidade Total de Erros",
+            "notifications": "Quantidade Total de Notificações Encontradas",
+            "patients_not_found": "Quantidade Total de Notificações Não Encontradas",
+            "duplicates": "Quantidade Total de Notificações Duplicadas",
+            "oportunity": "Quantidade de Fichas Oportunas",
+            "not_oportunity": "Quantidade de Fichas Não Oportunas",
+            "investigated": "Total de Fichas Investigadas",
+            "warnings": "Quantidade de Avisos",
+            "search_time": "Tempo Total de Pesquisa (Segundos)",
+            "investigation_time": "Tempo Total de Investigação (Segundos)",
+            "average_search_time": "Tempo Médio de Pesquisa (Segundos)",
+            "average_investigation_time": "Tempo Médio de Investigação (Total Investigado / Segundos)",
+            "average_notifications_found": "Média de Notificações Encontradas (Notificacoes / Segundos)",
+        }
+
+        self.df_stats = pd.DataFrame(columns=["Estatística", "Valor"])
+        # Inicialização das estatísticas
+        for key, value in self.stats_translated.items():
+            self.df_stats.loc[len(self.df_stats.index)] = [value, self.stats[key]]
 
     def set_patient(self, patient: Patient):
         """Set the current patient that the report will be about
@@ -121,6 +144,9 @@ class Report:
             SCRIPT_GENERATED_PATH / self.__reports_filename, engine="openpyxl"
         )
         self.df.to_excel(writer, sheet_name="Relatório", index=False)
+
+        self.__update_stats_df()
+        self.df_stats.to_excel(writer, sheet_name="Estatísticas", index=False)
 
         worksheet = writer.sheets["Relatório"]
 
@@ -210,6 +236,7 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
+        self.increment_stat("warnings")
         self.__add_message(message, "warn", observation)
 
     def error(self, message: str, observation: str = ""):
@@ -219,6 +246,7 @@ class Report:
             message (str): The message
             observation (str, optional): Some observation about the message. Defaults to "".
         """
+        self.increment_stat("errors")
         self.__add_message(message, "error", observation)
 
     def success(self, message: str, observation: str = ""):
@@ -243,3 +271,33 @@ class Report:
             "Algum erro e que precisa ser revisado, algo que impediu de alguma forma, por algum motivo, que a ficha fosse investigada"
         )
         self.success("Indicador claro e objetivo que a ficha foi investigada")
+
+    def increment_stat(self, key: str, value: Union[int, float] = 1):
+        """Increment stats in the report
+
+        Args:
+            key (str): The key to increment
+            value (Union[int, float], optional): The value to increment. Defaults to 1.
+        """
+        self.stats[key] = self.stats.get(key, 0) + value
+
+        self.stats["average_search_time"] = (
+            self.stats["search_time"] / (self.stats["patients"])
+            if self.stats["patients"] > 0
+            else 0
+        )
+        self.stats["average_investigation_time"] = (
+            self.stats["investigation_time"] / (self.stats["investigated"])
+            if self.stats["investigated"] > 0
+            else 0
+        )
+        self.stats["average_notifications_found"] = (
+            self.stats["notifications"] / (self.stats["patients"])
+            if self.stats["patients"] > 0
+            else 0
+        )
+
+    def __update_stats_df(self):
+        """Update the stats dataframe"""
+        for key, value in self.stats_translated.items():
+            self.df_stats.loc[value] = self.stats[key]
