@@ -311,6 +311,9 @@ class Report:
         with UNIVERSAL_STATS_FILE_PATH.open(
             "w", encoding="utf-8"
         ) as writter, UNIVERSAL_STATS_FILE_PATH.open("r", encoding="utf-8") as reader:
-            universal_stats = json.load(reader)
+            try:
+                universal_stats = json.loads(reader.read())
+            except json.JSONDecodeError:
+                universal_stats = {}
             universal_stats[self.__reports_filename] = self.stats
             json.dump(universal_stats, writter, indent=4, ensure_ascii=False)
