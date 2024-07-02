@@ -262,7 +262,7 @@ class Properties:
         self.reporter.set_patient(self.patient)
 
         rules = {
-            "IgM": lambda time: time + timedelta(days=1) >= timedelta(days=6),
+            "IgM": lambda time: time >= timedelta(days=6),
             "NS1": lambda time: time <= timedelta(days=5),
             "PCR": lambda time: time <= timedelta(days=5),
         }
@@ -275,7 +275,9 @@ class Properties:
             return False
 
         rule = rules[self.patient.exam_type]
-        elapsed_time = self.patient.collection_date - self.first_symptoms_date
+        elapsed_time = (
+            self.patient.collection_date - self.first_symptoms_date
+        ) + timedelta(days=1)
 
         if elapsed_time.days < 0:
             self.reporter.warn(
