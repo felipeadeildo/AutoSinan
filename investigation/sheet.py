@@ -282,7 +282,7 @@ class Properties:
         if elapsed_time.days < 0:
             self.reporter.warn(
                 "Ficha de notificação desconsiderada (inoportuna) uma vez que a diferença entre Data de Coleta e a Data de 1ºs Sintomas é negativa.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+                f"Número da Notificação: {self.notification_number} | Data dos Primeiros Sintomas ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
             )
             return False
 
@@ -291,12 +291,12 @@ class Properties:
         if result:
             self.reporter.info(
                 "Ficha de notificação considerada oportuna.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+                f"Número da Notificação: {self.notification_number} | Data dos Primeiros Sintomas ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
             )
         else:
             self.reporter.info(
                 "Ficha de notificação NÃO considerada oportuna.",
-                f"Número da Notificação: {self.notification_number} | Data de Notificação ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
+                f"Número da Notificação: {self.notification_number} | Data dos Primeiros Sintomas ({self.f_first_symptoms_date}) - Data de Coleta ({self.patient.f_collection_date}) = {elapsed_time.days} dias.",
             )
 
         return result
