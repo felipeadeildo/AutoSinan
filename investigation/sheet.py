@@ -743,7 +743,7 @@ class Sheet(Properties):
             errors_txt = "\n".join(errors)
             self.reporter.error(
                 f"Erro ao tentar {doing} (ver observações)",
-                errors_txt,
+                f"Mensagem do Site: {errors_txt}",
             )
             display(f"Mensagem do Site: '{errors_txt}'", category="erro")
 
@@ -998,12 +998,14 @@ class Sheet(Properties):
                 "form:j_id306": "Excluir",
             },
         )
-        self.__log_errors(res, "excluir notificação")
+        had_error = self.__log_errors(res, "excluir notificação")
         self.reporter.set_patient(self.patient)
 
-        self.reporter.debug(
-            "Notificação excluída.", f"Notificação excluída: {self.notification_number}"
-        )
+        if not had_error:
+            self.reporter.debug(
+                "Notificação excluída.",
+                f"Notificação excluída: {self.notification_number}",
+            )
 
     def return_to_results_page(self):
         """Reset the javax.viewState returning to the results page allowing to open other sheets"""
