@@ -306,7 +306,9 @@ class Report:
     def __update_stats_df(self):
         """Update the stats dataframe"""
         for key, value in self.stats_translated.items():
-            self.df_stats.loc[value] = self.stats[key]
+            self.df_stats.loc[self.df_stats["Estatística"] == value, "Valor"] = (
+                self.stats[key]
+            )
 
         with UNIVERSAL_STATS_FILE_PATH.open(
             "w", encoding="utf-8"
