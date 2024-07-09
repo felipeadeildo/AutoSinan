@@ -311,6 +311,7 @@ class NotificationResearcher(Criterias):
                 self.reporter.warn(
                     "Exame sem número de notificação. Pesquisa abortada."
                 )
+                self.reporter.increment_stat("exams_without_notification_number")
                 return []
             criterias.extend(["Número da Notificação"])
         else:
