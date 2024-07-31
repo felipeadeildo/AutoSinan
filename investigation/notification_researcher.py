@@ -308,7 +308,7 @@ class NotificationResearcher(Criterias):
                     "Este paciente não possui número de notificação para que seja utilizada na pesquisa.",
                     category="info",
                 )
-                self.reporter.warn(
+                self.reporter.error(
                     "Exame sem número de notificação. Pesquisa abortada."
                 )
                 self.reporter.increment_stat("exams_without_notification_number")
@@ -325,6 +325,17 @@ class NotificationResearcher(Criterias):
             self.reporter.debug(
                 f"Pesquisando utilizando os critérios: {'; '.join(criterias)}"
             )
+
+        if "Data de Nascimento" in criterias and patient.birth_date is None:
+            display(
+                "Este paciente não possui data de nascimento para que seja utilizada na pesquisa.",
+                category="error",
+            )
+            self.reporter.error(
+                "Pacientente sem data de nascimento. Pesquisa abortada."
+            )
+            self.reporter.clean_patient()
+            return []
 
         for criteria in criterias:
             self.add_criteria(criteria, patient)
@@ -429,8 +440,8 @@ class NotificationResearcher(Criterias):
                 return []
             elif any(sheet.is_notified_by_another_municipality for sheet in sheets):
                 self.reporter.warn(
-                    "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto todos os resultados deste paciente será ignorado.",
-                    f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                    "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto, todos os resultados deste paciente serão ignorados.",
+                    f"Números de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
                 )
                 return []
             elif any(sheet.is_extra_case for sheet in sheets):

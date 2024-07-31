@@ -861,7 +861,7 @@ class Sheet(Properties):
         If the classification is already defined to 11 or 12 it will not be changed
         """
         if self.dengue_classification in ("11", "12"):
-            self.reporter.warn(
+            self.reporter.debug(
                 f"Investigação JÁ possui classificação selecionada: {self.f_dengue_classification}",
                 "Permanece classificação definida do site.",
             )
@@ -874,7 +874,7 @@ class Sheet(Properties):
 
         classification = self.investigation_form_data["form:dengue_classificacao"]
         if not classification:
-            self.reporter.warn(
+            self.reporter.success(
                 "Nenhuma classificação definida para este paciente.",
                 "Isto impede a definição da data de encerramento.",
             )

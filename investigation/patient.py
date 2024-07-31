@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 import pandas as pd
 
@@ -53,22 +54,26 @@ class Properties:
         return self.data["Núm. Notificação Sinan"]
 
     @property
-    def birth_date(self) -> datetime:
+    def birth_date(self) -> Optional[datetime]:
         """Gets the birth date of the patient (object).
 
         Returns:
-            datetime: The birth date of the patient.
+            Optional[datetime]: The birth date of the patient.
         """
-        return self.data["Data de Nascimento"]
+        return (
+            self.data["Data de Nascimento"]
+            if not pd.isna(self.data["Data de Nascimento"])
+            else None
+        )
 
     @property
     def f_birth_date(self) -> str:
         """Gets the formatted birth date (dd/mm/YYYY).
 
         Returns:
-            str: The formatted birth date.
+            str: The formatted birth date or N/A.
         """
-        return self.birth_date.strftime("%d/%m/%Y")
+        return self.birth_date.strftime("%d/%m/%Y") if self.birth_date else "N/A"
 
     @property
     def mother_name(self) -> str:

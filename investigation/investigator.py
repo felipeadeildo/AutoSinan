@@ -54,7 +54,7 @@ class DuplicateChecker:
         # 1. Every notifications does not have a investigation: Consider only the oldest notification and discard the rest
         if not all(sheet.has_previous_investigation for sheet in episode):
             self.reporter.warn(
-                "Todas as notificações do epsódio avaliado NÃO possuem ficha de investigação, portanto será considerado apenas a última notificação e o resto será excluído."
+                "Todas as notificações do episódio avaliado NÃO possuem ficha de investigação, portanto será considerado apenas a última notificação e o resto será excluído."
             )
             considered.append(episode[0])
             discarded.extend(episode[1:])
@@ -118,23 +118,23 @@ class DuplicateChecker:
             if patient.exam_result == "Não Reagente":
                 # TODO: 90 days before the collection date (????, idk)
                 self.reporter.warn(
-                    "O exame é do tipo IgM e o resultado é Não Reganete, portanto todos epsódios serão encerrados como decartados (se não houver classificação prévia).",
-                    f"Quantidade de epsódios encontrados: {len(episodes)}",
+                    "O exame é do tipo IgM e o resultado é Não Reagente, portanto todos episódios serão encerrados como descartados (se não houver classificação prévia).",
+                    f"Quantidade de episódios encontrados: {len(episodes)}",
                 )
                 for episode in episodes:
                     for sheet in episode:
                         sheet.investigate_patient()
             else:
                 self.reporter.warn(
-                    f"O exame é do tipo IgM e o resultado é {patient.exam_result}, portanto somente o último epsódio será encerrado deixando os demais em branco.",
-                    f"Quantidade de epsódios encontrados: {len(episodes)}",
+                    f"O exame é do tipo IgM e o resultado é {patient.exam_result}, portanto somente o último episódio será encerrado deixando os demais em branco.",
+                    f"Quantidade de episódios encontrados: {len(episodes)}",
                 )
                 for sheet in episodes[-1]:
                     sheet.investigate_patient()
         else:
             if len(episodes) > 1:
                 self.reporter.error(
-                    "A pesquisa retornou vários resultados que por sua vez gerou mais de um epsódio. O bot não sabe o que fazer nesta situação.",
+                    "A pesquisa retornou vários resultados que por sua vez gerou mais de um episódio. O bot não sabe o que fazer nesta situação.",
                     "Matrix Error kk",
                 )
                 return

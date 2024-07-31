@@ -134,7 +134,7 @@ class InvestigationBot(Bot):
                     f"Nenhum resultado encontrado para {patient.name}. Ignorado.",
                     category="info",
                 )
-                self.reporter.warn("Paciente ignorado por não ter nenhum resultado.")
+                self.reporter.error("Paciente ignorado por não ter nenhum resultado.")
                 self.reporter.increment_stat("patients_not_found")
             case 1:
                 display(
