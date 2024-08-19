@@ -6,3 +6,5 @@ settings.toml
 __pycache__/
 *.xlsx*
 *.json
+
+.env
