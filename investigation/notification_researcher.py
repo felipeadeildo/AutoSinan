@@ -441,7 +441,7 @@ class NotificationResearcher(Criterias):
             elif any(sheet.is_notified_by_another_municipality for sheet in sheets):
                 self.reporter.warn(
                     "Uma das fichas encontradas na pesquisa foi notificada por outro município, deve se pedir para que o município habilite para o município de residência. Portanto, todos os resultados deste paciente serão ignorados.",
-                    f"Números de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
+                    f"Nº de Notificação das fichas ignoradas: {';'.join(sheet.notification_number for sheet in sheets)}",
                 )
                 return []
             elif any(sheet.is_extra_case for sheet in sheets):
