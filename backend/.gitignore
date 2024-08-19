@@ -1,0 +1,8 @@
+dados/*
+*.ipynb
+*.log
+**/*.html
+settings.toml
+__pycache__/
+*.xlsx*
+*.json

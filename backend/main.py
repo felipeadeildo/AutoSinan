@@ -1,21 +1,29 @@
-from core.abstract import Bot
-from core.utils import clear_screen, get_settings
-from investigation import InvestigationBot
+from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
 
-# from notification import NotificationBot
+from config import settings
+from routers import auth
+
+print(f"Debug: {settings.debug}")
 
 
-if __name__ == "__main__":
-    clear_screen()
-    settings = get_settings()
-    bots: dict[str, type[Bot]] = {
-        "Bot de Investigação": InvestigationBot
-        # "Bot de Notificação": NotificationBot
-    }
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="AutoSinan",
+        description="Uma coleção de bots para automatizar tarefas no Sinan Online",
+        version="0.1.0",
+        docs_url="/docs" if settings.debug else None,
+        redoc_url="/redoc" if settings.debug else None,
+        openapi_url="/openapi.json" if settings.debug else None,
+    )
 
-    for i, opt in enumerate(bots.keys(), 1):
-        print(f"{i} - {opt}")
+    app.include_router(auth.router, prefix="/auth", tags=["Auth"])
 
-    choice = int(input("Qual bot deseja executar? "))
-    bot = bots[list(bots.keys())[choice - 1]]
-    bot(settings).start()
+    @app.get("/")
+    async def root():
+        return RedirectResponse(url="/docs")
+
+    return app
+
+
+app = create_app()
