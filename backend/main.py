@@ -1,10 +1,8 @@
+from config import settings
+from database import shutdown, startup
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
-
-from config import settings
-from routers import auth
-
-print(f"Debug: {settings.debug}")
+from routers import auth, users
 
 
 def create_app() -> FastAPI:
@@ -15,9 +13,12 @@ def create_app() -> FastAPI:
         docs_url="/docs" if settings.debug else None,
         redoc_url="/redoc" if settings.debug else None,
         openapi_url="/openapi.json" if settings.debug else None,
+        on_startup=[startup],
+        on_shutdown=[shutdown],
     )
 
     app.include_router(auth.router, prefix="/auth", tags=["Auth"])
+    app.include_router(users.router, prefix="/users", tags=["Users"])
 
     @app.get("/")
     async def root():

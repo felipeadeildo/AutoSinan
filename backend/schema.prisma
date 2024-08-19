@@ -1,0 +1,32 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider               = "prisma-client-py"
+  partial_type_generator = "database/partials.py"
+  recursive_type_depth   = 5
+}
+
+model Permission {
+  id    String @id @default(uuid()) @db.Uuid
+  name  String
+  roles Role[]
+}
+
+model Role {
+  id          String       @id @default(uuid()) @db.Uuid
+  name        String       @unique
+  permissions Permission[]
+  users       User[]
+}
+
+model User {
+  id       String @id @default(uuid()) @db.Uuid
+  name     String
+  username String @unique
+  password String
+  roleId   String @db.Uuid
+  role     Role   @relation(fields: [roleId], references: [id])
+}
