@@ -1,7 +1,6 @@
 from functools import wraps
 from typing import Annotated, Any, Callable
 
-from database.db import db
 from fastapi import Depends, HTTPException
 from prisma.models import User
 from services.auth.oauth2 import get_current_user
@@ -43,7 +42,7 @@ def permission_required(permission: str) -> Callable:
 
 # TODO: test this feature.
 async def resource_owner_required(
-    resource_model: str,
+    resource_model: ...,
     resource_identification: str,
     resource_identifier_column: str = "id",
     resource_owner_column: str = "user_id",
@@ -64,7 +63,7 @@ async def resource_owner_required(
     Raises:
         HTTPException: If the resource is not found or the user is not the owner.
     """
-    resource_query = getattr(db, resource_model)
+    resource_query = resource_model.prisma()
 
     forbidden_raise = HTTPException(
         status_code=403,
