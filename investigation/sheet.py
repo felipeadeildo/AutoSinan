@@ -907,15 +907,7 @@ class Sheet(Properties):
             )
             return
 
-        considered_date = self.f_closing_date.strip()
-
-        if considered_date:
-            if self.closing_date < self.patient.collection_date:
-                considered_date = TODAY_FORMATTED
-                self.reporter.warn(
-                    f"Data de encerramento do sinan ({self.f_closing_date}) é menor que a data de coleta ({self.patient.f_collection_date}). Portanto a data de encerramento será definida para a data que está no site: {self.f_closing_date}."
-                )
-        elif self.dengue_classification in ("11", "12"):
+        if self.dengue_classification in ("11", "12"):
             display(
                 f"Como a classificação já foi selecionada como {self.f_dengue_classification}. A data de encerramento não será definida.",
                 category="preenchimento",
@@ -924,11 +916,9 @@ class Sheet(Properties):
                 f"Como a classificação já foi selecionada como {self.f_dengue_classification}. A data de encerramento não será definida."
             )
             return
-        else:
-            considered_date = TODAY_FORMATTED
 
         self.investigation_form_data.update(
-            {"form:dengue_dataEncerramentoInputDate": considered_date}
+            {"form:dengue_dataEncerramentoInputDate": TODAY_FORMATTED}
         )
 
         res = self.session.post(
