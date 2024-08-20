@@ -11,7 +11,7 @@ router = APIRouter()
 
 
 @router.post(
-    "login",
+    "/login",
     summary="Login",
     response_model=Token,
     description="Login with username and password",
@@ -33,7 +33,7 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
 
 
 @router.get(
-    "me",
+    "/me",
     summary="Get Current User",
     response_model=UserSafe,
     description="Get current user data",
@@ -43,7 +43,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 
 @router.get(
-    "refresh-token",
+    "/refresh-token",
     tags=["Auth"],
     summary="Refresh Token",
     response_model=Token,

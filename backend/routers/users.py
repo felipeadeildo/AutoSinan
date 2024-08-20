@@ -46,7 +46,7 @@ async def list_users(current_user: Annotated[User, Depends(get_current_user)]):
     return await User.prisma().find_many()
 
 
-@router.delete("{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 @permission_required("users:delete")
 async def delete_user(
     user_id: str, current_user: Annotated[User, Depends(get_current_user)]
@@ -54,7 +54,7 @@ async def delete_user(
     await User.prisma().delete(where={"id": user_id})
 
 
-@router.put("{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.put("/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 @permission_required("users:update")
 async def update_user(
     user_id: str,
