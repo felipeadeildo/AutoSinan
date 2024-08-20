@@ -1,15 +1,14 @@
 <script setup lang="ts">
   definePageMeta({
     requiresAuth: true,
-    requiredRoles: ['user', 'admin'],
     middleware: 'auth',
+    allowedRoles: ['user', 'admin'],
   })
-
-  const session = useAuth()
 </script>
 
 <template>
   <div>
-    Hi, {{ session.user.value?.name }}
+    Página onde serão mostrados os logs da aplicação (aplicar filtros, exportar,
+    etc. etc.)
   </div>
 </template>
