@@ -5,7 +5,9 @@ export const useAuth = () => {
 
   const userState = useState<UserSession>('auth_user', () => ({}))
 
-  const isAuthenticated = computed(() => !!userState.value)
+  const isAuthenticated = computed(
+    () => !!(userState.value && userState.value.user)
+  )
 
   const loadUser = async () => {
     if (token.value) {
@@ -28,7 +30,7 @@ export const useAuth = () => {
   const logout = async () => {
     userState.value = {}
     token.value = null
-    navigateTo('/login')
+    await navigateTo('/login')
   }
 
   const login = async (username: string, password: string) => {

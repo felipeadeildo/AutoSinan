@@ -1,15 +1,12 @@
 <script setup lang="ts">
   definePageMeta({
     requiresAuth: true,
-    requiredRoles: ['user', 'admin'],
-    middleware: 'auth',
+    allowedRoles: ['user', 'admin'],
   })
 
   const session = useAuth()
 </script>
 
 <template>
-  <div>
-    Hi, {{ session.user.value?.name }}
-  </div>
+  <div>Olá, {{ session.user.value?.name }}</div>
 </template>

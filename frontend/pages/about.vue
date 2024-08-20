@@ -1,8 +1,6 @@
-
-
 <template>
-  <div>
-    Sobre (página dedicada à infomrçaões de cada bot e apresentação do
-    desenvolvedor @felipeadeildo)
-  </div>
+  <h1 class="text-4xl font-extrabold mb-6 text-center">Sobre o AutoSinan</h1>
+  <DeveloperProfile />
+  <ProjectDescription />
+  <FaqSection />
 </template>
