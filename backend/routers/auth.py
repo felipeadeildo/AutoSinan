@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from models.auth import Token
 from prisma.models import User
@@ -16,7 +16,9 @@ router = APIRouter()
     response_model=Token,
     description="Login with username and password",
 )
-async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
+async def login(
+    response: Response, form_data: Annotated[OAuth2PasswordRequestForm, Depends()]
+):
     user = await User.prisma().find_unique(where={"username": form_data.username})
     if not user:
         raise HTTPException(
@@ -29,6 +31,10 @@ async def login(form_data: Annotated[OAuth2PasswordRequestForm, Depends()]):
             detail="Incorrect username or password",
         )
     access_token = create_access_token(data={"sub": user.id})
+
+    response.set_cookie(
+        key="access_token", value=access_token, httponly=True, secure=True
+    )
     return {"access_token": access_token, "token_type": "bearer"}
 
 
@@ -49,6 +55,22 @@ async def get_me(current_user: User = Depends(get_current_user)):
     response_model=Token,
     description="Refresh token",
 )
-async def refresh_token(current_user: User = Depends(get_current_user)):
+async def refresh_token(
+    response: Response, current_user: User = Depends(get_current_user)
+):
     access_token = create_access_token(data={"sub": current_user.id})
+    response.set_cookie(
+        key="access_token", value=access_token, httponly=True, secure=True
+    )
     return {"access_token": access_token, "token_type": "bearer"}
+
+
+@router.get(
+    "/logout",
+    tags=["Auth"],
+    summary="Logout",
+    description="Delete access token",
+)
+async def logout(response: Response, current_user: User = Depends(get_current_user)):
+    response.delete_cookie(key="access_token", httponly=True, secure=True)
+    return {"message": "Deslogado com sucesso!"}
