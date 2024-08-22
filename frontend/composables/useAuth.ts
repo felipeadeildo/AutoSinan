@@ -13,7 +13,7 @@ export const useAuth = () => {
     if (token.value) {
       try {
         const fetchedUser = await useRequestFetch()<User | { message: string }>(
-          '/backend/auth/me',
+          '/api/auth/me',
           {
             headers: { Authorization: `Bearer ${token.value}` },
           }
@@ -35,7 +35,7 @@ export const useAuth = () => {
 
   const login = async (username: string, password: string) => {
     const data = await useRequestFetch()<{ access_token?: string }>(
-      '/backend/auth/login',
+      '/api/auth/login',
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
