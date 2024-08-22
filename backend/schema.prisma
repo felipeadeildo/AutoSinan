@@ -4,14 +4,15 @@ datasource db {
 }
 
 generator client {
-  provider               = "prisma-client-py"
-  partial_type_generator = "database/partials.py"
-  recursive_type_depth   = 5
+  provider                    = "prisma-client-py"
+  partial_type_generator      = "database/partials.py"
+  recursive_type_depth        = 7
+  enable_experimental_decimal = true
 }
 
 model Permission {
   id    String @id @default(uuid()) @db.Uuid
-  name  String
+  name  String @unique
   roles Role[]
 }
 
@@ -23,10 +24,143 @@ model Role {
 }
 
 model User {
-  id       String @id @default(uuid()) @db.Uuid
-  name     String
-  username String @unique
-  password String
-  roleId   String @db.Uuid
-  role     Role   @relation(fields: [roleId], references: [id])
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String
+  username      String         @unique
+  password      String
+  roleId        String         @db.Uuid
+  role          Role           @relation(fields: [roleId], references: [id])
+  botExecutions BotExecution[]
+  subscriptions Subscription[]
+}
+
+model Plan {
+  id            String         @id @default(uuid()) @db.Uuid
+  name          String         @unique
+  description   String
+  currentPrice  Decimal        @db.Decimal(10, 2)
+  subscriptions Subscription[]
+  benefits      PlanBenefit[]
+}
+
+model Subscription {
+  id        String             @id @default(uuid()) @db.Uuid
+  userId    String             @db.Uuid
+  user      User               @relation(fields: [userId], references: [id])
+  planId    String             @db.Uuid
+  plan      Plan               @relation(fields: [planId], references: [id])
+  startDate DateTime           @default(now())
+  endDate   DateTime?
+  pricePaid Decimal            @db.Decimal(10, 2)
+  status    SubscriptionStatus
+}
+
+model PlanBenefit {
+  id         String      @id @default(uuid()) @db.Uuid
+  planId     String      @db.Uuid
+  plan       Plan        @relation(fields: [planId], references: [id])
+  botId      String      @db.Uuid
+  bot        Bot         @relation(fields: [botId], references: [id])
+  taskLimits TaskLimit[]
+}
+
+model TaskLimit {
+  id             String      @id @default(uuid()) @db.Uuid
+  planBenefitId  String      @db.Uuid
+  planBenefit    PlanBenefit @relation(fields: [planBenefitId], references: [id])
+  taskType       String
+  maxConcurrency Int
+}
+
+model Bot {
+  id            String            @id @default(uuid()) @db.Uuid
+  name          String            @unique
+  description   String
+  version       String
+  status        BotStatus
+  lastUpdated   DateTime          @updatedAt
+  executions    BotExecution[]
+  interruptions BotInterruption[]
+  tasks         BotTask[]
+  planBenefits  PlanBenefit[]
+}
+
+model BotTask {
+  id          String @id @default(uuid()) @db.Uuid
+  botId       String @db.Uuid
+  bot         Bot    @relation(fields: [botId], references: [id])
+  name        String
+  description String
+  taskType    String
+}
+
+model BotExecution {
+  id             String          @id @default(uuid()) @db.Uuid
+  botId          String          @db.Uuid
+  bot            Bot             @relation(fields: [botId], references: [id])
+  userId         String          @db.Uuid
+  user           User            @relation(fields: [userId], references: [id])
+  startTime      DateTime        @default(now())
+  endTime        DateTime?
+  status         ExecutionStatus
+  metadata       Json
+  filePath       String?
+  executionLogs  ExecutionLog[]
+  taskExecutions TaskExecution[]
+}
+
+model TaskExecution {
+  id             String          @id @default(uuid()) @db.Uuid
+  botExecutionId String          @db.Uuid
+  botExecution   BotExecution    @relation(fields: [botExecutionId], references: [id])
+  taskType       String
+  startTime      DateTime        @default(now())
+  endTime        DateTime?
+  status         ExecutionStatus
+  metadata       Json
+}
+
+model ExecutionLog {
+  id             String       @id @default(uuid()) @db.Uuid
+  botExecutionId String       @db.Uuid
+  botExecution   BotExecution @relation(fields: [botExecutionId], references: [id])
+  timestamp      DateTime     @default(now())
+  message        String
+  level          LogLevel
+}
+
+model BotInterruption {
+  id          String    @id @default(uuid()) @db.Uuid
+  botId       String    @db.Uuid
+  bot         Bot       @relation(fields: [botId], references: [id])
+  startTime   DateTime  @default(now())
+  endTime     DateTime?
+  reason      String
+  description String?
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum BotStatus {
+  ACTIVE
+  PAUSED
+  DEPRECATED
+}
+
+enum ExecutionStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum LogLevel {
+  INFO
+  WARNING
+  ERROR
+  DEBUG
 }
