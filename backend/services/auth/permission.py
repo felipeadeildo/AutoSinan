@@ -28,10 +28,15 @@ def permission_required(permission: str) -> Callable:
         ) -> Any:
             role = current_user.role
             if role is None:
-                raise HTTPException(status_code=403, detail="Operation not permitted")
+                raise HTTPException(
+                    status_code=403, detail="Operation not permitted (role)"
+                )
 
             if permission not in [perm.name for perm in role.permissions or []]:
-                raise HTTPException(status_code=403, detail="Operation not permitted")
+                raise HTTPException(
+                    status_code=403,
+                    detail="Operation not permitted (insufficient permissions)",
+                )
 
             return await func(*args, current_user=current_user, **kwargs)
 
