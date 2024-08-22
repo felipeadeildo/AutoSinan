@@ -24,7 +24,7 @@ async def get_current_user(token: Annotated[str, Depends(oauth2_scheme)]) -> Use
         raise credentials_exception
 
     user = await User.prisma().find_unique(
-        where={"id": user_id}, include={"role": True}
+        where={"id": user_id}, include={"role": {"include": {"permissions": True}}}
     )
     if user is None:
         raise credentials_exception
