@@ -10,6 +10,7 @@ BOTS: List[BotCreateInput] = [
         "description": "Dado os resultados de exames do GAL, pesquisa pelos pacientes em questão e aplica a investigação.",
         "version": "0.1.0",
         "status": BotStatus.ACTIVE,
+        "slug": "investigator",
         "lastUpdated": datetime(2024, 8, 22, 15, 30),
     }
 ]

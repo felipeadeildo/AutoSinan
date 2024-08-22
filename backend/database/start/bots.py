@@ -17,5 +17,6 @@ async def setup():
                     "version": bot["version"],
                     "status": bot["status"],
                     "lastUpdated": bot.get("lastUpdated", datetime.now()),
+                    "slug": bot["slug"],
                 },
             )
