@@ -78,7 +78,7 @@ model Bot {
   description   String
   version       String
   status        BotStatus
-  slug          String
+  slug          String            @unique
   lastUpdated   DateTime          @updatedAt
   executions    BotExecution[]
   interruptions BotInterruption[]
