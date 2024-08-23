@@ -41,6 +41,7 @@
 <template>
   <UCard
     :ui="{
+      base: 'max-w-sm',
       header: {
         padding: 'px-4 py-3 sm:px-5',
       },
@@ -54,7 +55,7 @@
       <div class="flex justify-between items-center">
         <h2 class="text-xl font-semibold">{{ bot.name }}</h2>
         <UTooltip :text="botStatusDescription" :popper="{ arrow: true }">
-          <UBadge :color="botStatusColor" variant="soft">
+          <UBadge :color="botStatusColor" variant="soft" class="cursor-pointer">
             {{ bot.status }}
           </UBadge>
         </UTooltip>

@@ -14,4 +14,7 @@ export default defineNuxtConfig({
   icon: {
     localApiEndpoint: '/icons-api/**',
   },
+  app: {
+    pageTransition: { name: 'slide', mode: 'out-in' },
+  }
 })

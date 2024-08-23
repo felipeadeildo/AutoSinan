@@ -10,18 +10,12 @@
     setTimeout(async () => {
       await session.logout()
       await navigateTo('/login')
-    }, 2000)
+    }, 1500)
   )
 </script>
 
 <template>
-  <UAlert
-    icon="i-pepicons-pop-arrows-spin-circle"
-    color="blue"
-    title="Saindo..."
-    variant="soft"
-    :ui="{
-      icon: { base: 'flex-shrink-0 w-5 h-5 animate-spin' },
-    }"
-  />
+  <div class="flex justify-center items-center h-screen">
+    <LoadingState text="Saindo..." />
+  </div>
 </template>

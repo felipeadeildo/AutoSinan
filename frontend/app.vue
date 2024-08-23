@@ -45,18 +45,25 @@
       to: computed(() => (isAuthenticated.value ? '/logout' : '/login')),
     },
   ])
+
+  useHead({
+    titleTemplate: (title) => (title ? `${title} | AutoSinan` : 'AutoSinan'),
+  })
 </script>
 
 <template>
-  <div class="grid grid-cols-12 h-full">
+  <GlobalLoading />
+  <div class="grid grid-cols-12 h-full min-h-screen">
     <!-- Sidebar Navigation -->
-    <UVerticalNavigation
-      :links="links"
-      class="col-span-2 border-r-2 border-r-gray-900 rounded-r-lg min-h-screen"
-    />
+    <div class="col-span-2">
+      <UVerticalNavigation
+        :links="links"
+        class="border-r-2 border-r-gray-900 rounded-r-lg h-full"
+      />
+    </div>
 
     <!-- Main Content Area -->
-    <div class="col-span-10 flex flex-col">
+    <div class="col-span-10 flex flex-col relative">
       <!-- Theme Toggle Button -->
       <ClientOnly>
         <UButton
@@ -66,11 +73,12 @@
           variant="ghost"
           aria-label="Alterar tema"
           @click="isDark = !isDark"
-          class="fixed bottom-4 right-4"
+          class="fixed bottom-4 right-4 z-50"
         />
       </ClientOnly>
 
-      <UContainer>
+      <!-- Page Content -->
+      <UContainer class="flex-1">
         <NuxtPage />
       </UContainer>
     </div>
@@ -78,3 +86,18 @@
 
   <UNotifications />
 </template>
+
+<style>
+  .slide-enter-active,
+  .slide-leave-active {
+    @apply transition-transform duration-300 ease-in-out;
+  }
+
+  .slide-enter-from {
+    @apply transform translate-y-full;
+  }
+
+  .slide-leave-to {
+    @apply transform -translate-y-full;
+  }
+</style>
