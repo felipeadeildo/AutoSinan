@@ -1,13 +1,11 @@
 <script setup lang="ts">
-  import type { BotInfos } from '~/types/bot'
-
   definePageMeta({
     requiresAuth: true,
     allowedRoles: ['user', 'admin'],
   })
 
   const session = useAuth()
-  const { status, data: bots } = await useFetch<BotInfos[]>('/api/bots')
+  const { status, bots } = useBots()
 </script>
 
 <template>
