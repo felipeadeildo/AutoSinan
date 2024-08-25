@@ -1,5 +1,5 @@
 <script setup lang="ts">
-  const { isAuthenticated } = useAuth()
+  const logInOutItem = useNavigationLogInOutItem()
 
   const links = ref([
     [
@@ -30,14 +30,9 @@
         icon: 'i-clarity-info-circle-line',
         to: '/about',
       },
-      {
-        label: computed(() => (isAuthenticated.value ? 'Sair' : 'Entrar')),
-        icon: 'i-clarity-login-line',
-        to: computed(() => (isAuthenticated.value ? '/logout' : '/login')),
-      },
+      logInOutItem,
     ],
   ])
-  // TODO: adicionar lista de bots nos links de nevageção (links.push(...))
 </script>
 
 <template>

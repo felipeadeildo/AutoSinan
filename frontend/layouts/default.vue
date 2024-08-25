@@ -1,9 +1,3 @@
-<script setup lang="ts">
-  useHead({
-    titleTemplate: (title) => (title ? `${title} | AutoSinan` : 'AutoSinan'),
-  })
-</script>
-
 <template>
   <GlobalLoading />
   <div class="grid grid-cols-12 h-full min-h-screen">

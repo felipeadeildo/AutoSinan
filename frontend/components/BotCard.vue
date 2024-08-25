@@ -70,7 +70,7 @@
 
     <template #footer>
       <UButton
-        :to="`/bots/${bot.slug}`"
+        :to="`/bots/${bot.slug}/run`"
         icon="i-mdi-arrow-right"
         color="primary"
         size="sm"
