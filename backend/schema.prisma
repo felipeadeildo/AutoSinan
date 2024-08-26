@@ -24,14 +24,15 @@ model Role {
 }
 
 model User {
-  id            String         @id @default(uuid()) @db.Uuid
-  name          String
-  username      String         @unique
-  password      String
-  roleId        String         @db.Uuid
-  role          Role           @relation(fields: [roleId], references: [id])
-  botExecutions BotExecution[]
-  subscriptions Subscription[]
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String
+  username          String             @unique
+  password          String
+  roleId            String             @db.Uuid
+  role              Role               @relation(fields: [roleId], references: [id])
+  botExecutions     BotExecution[]
+  subscriptions     Subscription[]
+  botConfigurations BotConfiguration[]
 }
 
 model Plan {
@@ -73,17 +74,18 @@ model TaskLimit {
 }
 
 model Bot {
-  id            String            @id @default(uuid()) @db.Uuid
-  name          String            @unique
-  description   String
-  version       String
-  status        BotStatus
-  slug          String            @unique
-  lastUpdated   DateTime          @updatedAt
-  executions    BotExecution[]
-  interruptions BotInterruption[]
-  tasks         BotTask[]
-  planBenefits  PlanBenefit[]
+  id             String             @id @default(uuid()) @db.Uuid
+  name           String             @unique
+  description    String
+  version        String
+  status         BotStatus
+  slug           String             @unique
+  lastUpdated    DateTime           @updatedAt
+  executions     BotExecution[]
+  interruptions  BotInterruption[]
+  tasks          BotTask[]
+  planBenefits   PlanBenefit[]
+  configurations BotConfiguration[]
 }
 
 model BotTask {
@@ -138,6 +140,24 @@ model BotInterruption {
   endTime     DateTime?
   reason      String
   description String?
+}
+
+model BotConfiguration {
+  id     String          @id @default(uuid()) @db.Uuid
+  botId  String          @db.Uuid
+  bot    Bot             @relation(fields: [botId], references: [id])
+  userId String          @db.Uuid
+  user   User            @relation(fields: [userId], references: [id])
+  key    String
+  value  String
+  type   ConfigValueType
+}
+
+enum ConfigValueType {
+  INT
+  FLOAT
+  STRING
+  BOOLEAN
 }
 
 enum SubscriptionStatus {
