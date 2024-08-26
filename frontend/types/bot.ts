@@ -15,3 +15,17 @@ export type BotInfos = {
   lastUpdated: string
   slug: string
 }
+
+export type BotConfiguration = {
+  id: string
+  key: string
+  value: string
+  type: ConfigValueType
+}
+
+export enum ConfigValueType {
+  INT = 'INT',
+  FLOAT = 'FLOAT',
+  STRING = 'STRING',
+  BOOLEAN = 'BOOLEAN',
+}
