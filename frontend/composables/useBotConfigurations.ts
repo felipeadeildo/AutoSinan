@@ -1,12 +1,9 @@
 import type { BotConfiguration } from '~/types/bot'
 
-type Props = {
-  bot: string
-}
 
-export const useBotConfigurations = ({ bot }: Props) => {
+export const useBotConfigurations = (botSlug: string) => {
   const { status, data: botConfigurations } = useFetch<BotConfiguration[]>(
-    `/api/configurations/${bot}`
+    `/api/configurations/${botSlug}`
   )
 
   return { status, botConfigurations }
