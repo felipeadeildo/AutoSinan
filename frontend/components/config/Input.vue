@@ -1,28 +1,18 @@
 <script setup lang="ts">
   import type { BotConfiguration } from '~/types/bot'
 
-  const emit = defineEmits<{
-    save: [BotConfiguration]
-  }>()
-
-  const props = defineProps<{ config: BotConfiguration }>()
+  const props = defineProps<{ config: BotConfiguration; botSlug: string }>()
   const value = ref(props.config.value)
-  const isUpdating = ref(false)
+
+  const { isUpdating, updateConfiguration } = useBotConfigurationUpdate(
+    props.botSlug
+  )
 
   const debouncedSave = useDebounce(async () => {
-    isUpdating.value = true
-    try {
-      emit('save', { ...props.config, value: value.value })
-    } finally {
-      isUpdating.value = false
-    }
+    await updateConfiguration({ ...props.config, value: value.value })
   }, 500)
 
-  watch(value, () => {
-    if (value.value !== props.config.value && value.value) {
-      debouncedSave()
-    }
-  })
+  watch(value, debouncedSave)
 </script>
 
 <template>
@@ -37,7 +27,7 @@
     </template>
 
     <template #default>
-      <UInput v-model="value" :disabled="isUpdating" :loading="isUpdating" />
+      <UInput v-model="value" :disabled="isUpdating" />
     </template>
 
     <template #help>
