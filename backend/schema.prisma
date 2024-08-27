@@ -24,143 +24,162 @@ model Role {
 }
 
 model User {
-  id                String             @id @default(uuid()) @db.Uuid
-  name              String
-  username          String             @unique
-  password          String
-  roleId            String             @db.Uuid
-  role              Role               @relation(fields: [roleId], references: [id])
-  botExecutions     BotExecution[]
-  subscriptions     Subscription[]
-  botConfigurations BotConfiguration[]
+  id         String      @id @default(uuid()) @db.Uuid
+  name       String
+  username   String      @unique
+  password   String
+  roleId     String      @db.Uuid
+  role       Role        @relation(fields: [roleId], references: [id])
+  executions Exec[]
+  subs       Sub[]
+  configs    BotConfig[]
 }
 
 model Plan {
-  id            String         @id @default(uuid()) @db.Uuid
-  name          String         @unique
-  description   String
-  currentPrice  Decimal        @db.Decimal(10, 2)
-  subscriptions Subscription[]
-  benefits      PlanBenefit[]
+  id          String    @id @default(uuid()) @db.Uuid
+  name        String    @unique
+  description String
+  price       Decimal   @db.Decimal(10, 2)
+  subs        Sub[]
+  benefits    Benefit[]
 }
 
-model Subscription {
-  id        String             @id @default(uuid()) @db.Uuid
-  userId    String             @db.Uuid
-  user      User               @relation(fields: [userId], references: [id])
-  planId    String             @db.Uuid
-  plan      Plan               @relation(fields: [planId], references: [id])
-  startDate DateTime           @default(now())
+model Sub {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  user      User      @relation(fields: [userId], references: [id])
+  planId    String    @db.Uuid
+  plan      Plan      @relation(fields: [planId], references: [id])
+  startDate DateTime  @default(now())
   endDate   DateTime?
-  pricePaid Decimal            @db.Decimal(10, 2)
-  status    SubscriptionStatus
+  paid      Decimal   @db.Decimal(10, 2)
+  status    SubStatus
 }
 
-model PlanBenefit {
-  id         String      @id @default(uuid()) @db.Uuid
-  planId     String      @db.Uuid
-  plan       Plan        @relation(fields: [planId], references: [id])
-  botId      String      @db.Uuid
-  bot        Bot         @relation(fields: [botId], references: [id])
-  taskLimits TaskLimit[]
+model Benefit {
+  id     String  @id @default(uuid()) @db.Uuid
+  planId String  @db.Uuid
+  plan   Plan    @relation(fields: [planId], references: [id])
+  botId  String  @db.Uuid
+  bot    Bot     @relation(fields: [botId], references: [id])
+  limits Limit[]
 }
 
-model TaskLimit {
-  id             String      @id @default(uuid()) @db.Uuid
-  planBenefitId  String      @db.Uuid
-  planBenefit    PlanBenefit @relation(fields: [planBenefitId], references: [id])
-  taskType       String
-  maxConcurrency Int
+model Limit {
+  id        String  @id @default(uuid()) @db.Uuid
+  benefitId String  @db.Uuid
+  benefit   Benefit @relation(fields: [benefitId], references: [id])
+  taskType  String
+  maxConcur Int
 }
 
 model Bot {
-  id             String             @id @default(uuid()) @db.Uuid
-  name           String             @unique
-  description    String
-  version        String
-  status         BotStatus
-  slug           String             @unique
-  lastUpdated    DateTime           @updatedAt
-  executions     BotExecution[]
-  interruptions  BotInterruption[]
-  tasks          BotTask[]
-  planBenefits   PlanBenefit[]
-  configurations BotConfiguration[]
+  id         String             @id @default(uuid()) @db.Uuid
+  name       String             @unique
+  desc       String
+  version    String
+  status     BotStatus
+  slug       String             @unique
+  updatedAt  DateTime           @updatedAt
+  execs      Exec[]
+  interrupts Interrupt[]
+  tasks      Task[]
+  benefits   Benefit[]
+  configs    BotConfig[]
+  defaults   DefaultBotConfig[]
 }
 
-model BotTask {
-  id          String @id @default(uuid()) @db.Uuid
-  botId       String @db.Uuid
-  bot         Bot    @relation(fields: [botId], references: [id])
-  name        String
-  description String
-  taskType    String
+model Task {
+  id       String @id @default(uuid()) @db.Uuid
+  botId    String @db.Uuid
+  bot      Bot    @relation(fields: [botId], references: [id])
+  name     String
+  desc     String
+  taskType String
 }
 
-model BotExecution {
-  id             String          @id @default(uuid()) @db.Uuid
-  botId          String          @db.Uuid
-  bot            Bot             @relation(fields: [botId], references: [id])
-  userId         String          @db.Uuid
-  user           User            @relation(fields: [userId], references: [id])
-  startTime      DateTime        @default(now())
-  endTime        DateTime?
-  status         ExecutionStatus
-  metadata       Json
-  filePath       String?
-  executionLogs  ExecutionLog[]
-  taskExecutions TaskExecution[]
+model Exec {
+  id        String     @id @default(uuid()) @db.Uuid
+  botId     String     @db.Uuid
+  bot       Bot        @relation(fields: [botId], references: [id])
+  userId    String     @db.Uuid
+  user      User       @relation(fields: [userId], references: [id])
+  startTime DateTime   @default(now())
+  endTime   DateTime?
+  status    ExecStatus
+  metadata  Json
+  filePath  String?
+  logs      Log[]
+  taskExecs TaskExec[]
 }
 
-model TaskExecution {
-  id             String          @id @default(uuid()) @db.Uuid
-  botExecutionId String          @db.Uuid
-  botExecution   BotExecution    @relation(fields: [botExecutionId], references: [id])
-  taskType       String
-  startTime      DateTime        @default(now())
-  endTime        DateTime?
-  status         ExecutionStatus
-  metadata       Json
+model TaskExec {
+  id        String     @id @default(uuid()) @db.Uuid
+  execId    String     @db.Uuid
+  exec      Exec       @relation(fields: [execId], references: [id])
+  taskType  String
+  startTime DateTime   @default(now())
+  endTime   DateTime?
+  status    ExecStatus
+  metadata  Json
 }
 
-model ExecutionLog {
-  id             String       @id @default(uuid()) @db.Uuid
-  botExecutionId String       @db.Uuid
-  botExecution   BotExecution @relation(fields: [botExecutionId], references: [id])
-  timestamp      DateTime     @default(now())
-  message        String
-  level          LogLevel
+model Log {
+  id        String   @id @default(uuid()) @db.Uuid
+  execId    String   @db.Uuid
+  exec      Exec     @relation(fields: [execId], references: [id])
+  timestamp DateTime @default(now())
+  message   String
+  level     LogLevel
 }
 
-model BotInterruption {
-  id          String    @id @default(uuid()) @db.Uuid
-  botId       String    @db.Uuid
-  bot         Bot       @relation(fields: [botId], references: [id])
-  startTime   DateTime  @default(now())
-  endTime     DateTime?
-  reason      String
-  description String?
+model Interrupt {
+  id        String    @id @default(uuid()) @db.Uuid
+  botId     String    @db.Uuid
+  bot       Bot       @relation(fields: [botId], references: [id])
+  startTime DateTime  @default(now())
+  endTime   DateTime?
+  reason    String
+  desc      String?
 }
 
-model BotConfiguration {
-  id     String          @id @default(uuid()) @db.Uuid
-  botId  String          @db.Uuid
-  bot    Bot             @relation(fields: [botId], references: [id])
-  userId String          @db.Uuid
-  user   User            @relation(fields: [userId], references: [id])
+model DefaultBotConfig {
+  id      String            @id @default(uuid()) @db.Uuid
+  botId   String            @db.Uuid
+  bot     Bot               @relation(fields: [botId], references: [id])
+  key     String
+  name    String
+  desc    String
+  type    ConfigType
+  options BotConfigOption[]
+}
+
+model BotConfigOption {
+  id       String           @id @default(uuid()) @db.Uuid
+  configId String           @db.Uuid
+  config   DefaultBotConfig @relation(fields: [configId], references: [id], onDelete: Cascade)
+  key      String
+  value    String
+}
+
+model BotConfig {
+  id     String @id @default(uuid()) @db.Uuid
+  botId  String @db.Uuid
+  bot    Bot    @relation(fields: [botId], references: [id])
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id])
   key    String
   value  String
-  type   ConfigValueType
 }
 
-enum ConfigValueType {
+enum ConfigType {
   INT
   FLOAT
   STRING
   BOOLEAN
 }
 
-enum SubscriptionStatus {
+enum SubStatus {
   ACTIVE
   CANCELLED
   EXPIRED
@@ -172,7 +191,7 @@ enum BotStatus {
   DEPRECATED
 }
 
-enum ExecutionStatus {
+enum ExecStatus {
   PENDING
   RUNNING
   COMPLETED

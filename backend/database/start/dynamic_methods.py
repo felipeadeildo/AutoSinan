@@ -1,17 +1,17 @@
 from typing import Callable, Mapping
 
-from prisma.enums import ConfigValueType
-from prisma.models import BotConfiguration
+from prisma.enums import ConfigType
+from prisma.models import BotConfig
 from pydantic import field_serializer
 
 
 @field_serializer("value")
-def bot_configuration_serializer(self, value: str):
-    casters: Mapping[ConfigValueType, Callable] = {
-        ConfigValueType.INT: int,
-        ConfigValueType.FLOAT: float,
-        ConfigValueType.STRING: str,
-        ConfigValueType.BOOLEAN: lambda x: x.lower() == "true",
+def bot_config_serializer(self, value: str):
+    casters: Mapping[ConfigType, Callable] = {
+        ConfigType.INT: int,
+        ConfigType.FLOAT: float,
+        ConfigType.STRING: str,
+        ConfigType.BOOLEAN: lambda x: x.lower() == "true",
     }
 
     caster = casters.get(self.type, lambda x: x)
@@ -19,4 +19,4 @@ def bot_configuration_serializer(self, value: str):
 
 
 async def setup():
-    setattr(BotConfiguration, "serializer", bot_configuration_serializer)
+    setattr(BotConfig, "serializer", bot_config_serializer)
