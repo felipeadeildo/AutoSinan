@@ -9,18 +9,20 @@ export type BotStatuses = keyof typeof BotStatus
 export type BotInfos = {
   id: string
   name: string
-  description: string
+  desc: string
   version: string
   status: BotStatuses
-  lastUpdated: string
+  updatedAt: string
   slug: string
 }
 
 export type BotConfiguration = {
-  id: string
   key: string
   value: string
   type: ConfigValueType
+  name: string
+  desc: string
+  options: Array<{ key: string; value: string }>
 }
 
 export enum ConfigValueType {

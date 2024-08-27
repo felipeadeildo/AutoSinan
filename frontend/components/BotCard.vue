@@ -28,7 +28,7 @@
   })
 
   const botLastUpdated = computed(() => {
-    return new Date(bot.lastUpdated).toLocaleString('pt-BR', {
+    return new Date(bot.updatedAt).toLocaleString('pt-BR', {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -63,7 +63,7 @@
     </template>
 
     <div class="px-4 py-2">
-      <p class="text-sm">{{ bot.description }}</p>
+      <p class="text-sm">{{ bot.desc }}</p>
       <p class="text-xs mt-1 text-end">Versão: {{ bot.version }}</p>
       <p class="text-xs text-end">Última Atualização: {{ botLastUpdated }}</p>
     </div>
