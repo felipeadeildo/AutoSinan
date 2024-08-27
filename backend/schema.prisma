@@ -111,17 +111,30 @@ model Exec {
   filePath  String?
   logs      Log[]
   taskExecs TaskExec[]
+  files     ExecFile[]
 }
 
 model TaskExec {
-  id        String     @id @default(uuid()) @db.Uuid
-  execId    String     @db.Uuid
-  exec      Exec       @relation(fields: [execId], references: [id])
-  taskType  String
-  startTime DateTime   @default(now())
-  endTime   DateTime?
-  status    ExecStatus
-  metadata  Json
+  id           String     @id @default(uuid()) @db.Uuid
+  execId       String     @db.Uuid
+  exec         Exec       @relation(fields: [execId], references: [id])
+  parentTaskId String?    @db.Uuid
+  parentTask   TaskExec?  @relation("ParentTask", fields: [parentTaskId], references: [id])
+  childTasks   TaskExec[] @relation("ParentTask")
+  taskType     String
+  startTime    DateTime   @default(now())
+  endTime      DateTime?
+  status       ExecStatus
+  metadata     Json
+}
+
+model ExecFile {
+  id       String @id @default(uuid()) @db.Uuid
+  execId   String @db.Uuid
+  exec     Exec   @relation(fields: [execId], references: [id])
+  filePath String
+  fileName String
+  fileMeta Json
 }
 
 model Log {
