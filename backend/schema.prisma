@@ -106,9 +106,8 @@ model Exec {
   user      User       @relation(fields: [userId], references: [id])
   startTime DateTime   @default(now())
   endTime   DateTime?
-  status    ExecStatus
-  metadata  Json
-  filePath  String?
+  status    ExecStatus @default(PENDING)
+  metadata  Json       @default("{}")
   logs      Log[]
   taskExecs TaskExec[]
   files     ExecFile[]
@@ -134,7 +133,7 @@ model ExecFile {
   exec     Exec   @relation(fields: [execId], references: [id])
   filePath String
   fileName String
-  fileMeta Json
+  fileMeta Json   @default("{}")
 }
 
 model Log {
