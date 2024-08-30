@@ -1,4 +1,12 @@
-from prisma.models import Bot, BotConfig, BotConfigOption, DefaultBotConfig, User
+from prisma.models import (
+    Bot,
+    BotConfig,
+    BotConfigOption,
+    DefaultBotConfig,
+    Exec,
+    TaskExec,
+    User,
+)
 
 # TODO: refatorar estes partials (tem coisa demais sendo retornada na API)
 
@@ -59,4 +67,14 @@ DefaultBotConfig.create_partial(
 # Partials for BotConfigOption model
 BotConfigOption.create_partial(
     "BotConfigOptionSafe", include={"key": True, "value": True}
+)
+
+# Partials for TaskExec model
+TaskExec.create_partial("TaskExecWithoutExec", exclude={"execId", "exec"})
+
+# Partials for Exec model
+Exec.create_partial(
+    "ExecSafe",
+    exclude={"botId", "userId", "user", "logs", "taskExecs"},
+    relations={"bot": "BotSafe"},
 )
