@@ -3,7 +3,7 @@ from database import shutdown, startup
 from fastapi import FastAPI
 from fastapi.responses import RedirectResponse
 from middlewares import SessionMiddleware
-from routers import auth, bots, configurations, users
+from routers import auth, bots, configurations, executions, users
 
 
 def create_app() -> FastAPI:
@@ -26,6 +26,7 @@ def create_app() -> FastAPI:
     app.include_router(
         configurations.router, prefix="/configurations", tags=["Configurations"]
     )
+    app.include_router(executions.router, prefix="/executions", tags=["Executions"])
 
     @app.get("/")
     async def root():
