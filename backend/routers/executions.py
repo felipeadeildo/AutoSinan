@@ -34,6 +34,7 @@ async def create_execution(
 
 
 @router.post("/{exec_id}/upload", response_model=ExecFileSafe)
+@permission_required("executions:update")
 async def upload_file(
     exec_id: str,
     file: UploadFile = File(...),
@@ -59,6 +60,7 @@ async def upload_file(
 
 
 @router.delete("/{file_id}", status_code=status.HTTP_204_NO_CONTENT)
+@permission_required("executions:update")
 async def remove_file(file_id: str, current_user: User = Depends(get_current_user)):
     exec_file = await ExecFile.prisma().find_unique(
         where={"id": file_id}, include={"exec": True}
