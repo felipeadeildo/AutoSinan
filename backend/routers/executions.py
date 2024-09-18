@@ -11,11 +11,15 @@ from services.auth import get_current_user, permission_required
 router = APIRouter()
 
 
-@router.get("", response_model=List[ExecSafe])
+@router.get("/{bot_slug}", response_model=List[ExecSafe])
 @permission_required("executions:read")
-async def get_executions(current_user: User = Depends(get_current_user)):
+async def get_executions(bot_slug: str, current_user: User = Depends(get_current_user)):
     return await ExecSafe.prisma().find_many(
-        where={"userId": current_user.id}, order={"startTime": "desc"}
+        where={
+            "userId": current_user.id,
+            "bot": {"is": {"slug": {"equals": bot_slug}}},
+        },
+        order={"startTime": "desc"},
     )
 
 
