@@ -73,12 +73,12 @@ BotConfigOption.create_partial(
 # Partials for TaskExec model
 TaskExec.create_partial("TaskExecWithoutExec", exclude={"execId", "exec"})
 
+# Partials for ExecFile model
+ExecFile.create_partial("ExecFileSafe", exclude={"execId", "exec", "filePath"})
+
 # Partials for Exec model
 Exec.create_partial(
     "ExecSafe",
-    exclude={"botId", "userId", "user", "logs", "taskExecs"},
-    relations={"bot": "BotSafe"},
+    exclude={"botId", "userId", "user", "logs", "taskExecs", "metadata"},
+    relations={"bot": "BotSafe", "files": "ExecFileSafe"},
 )
-
-# Partials for ExecFile model
-ExecFile.create_partial("ExecFileSafe", exclude={"execId", "exec", "filePath"})
