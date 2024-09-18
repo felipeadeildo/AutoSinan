@@ -4,6 +4,7 @@ from prisma.models import (
     BotConfigOption,
     DefaultBotConfig,
     Exec,
+    ExecFile,
     TaskExec,
     User,
 )
@@ -78,3 +79,6 @@ Exec.create_partial(
     exclude={"botId", "userId", "user", "logs", "taskExecs"},
     relations={"bot": "BotSafe"},
 )
+
+# Partials for ExecFile model
+ExecFile.create_partial("ExecFileSafe", exclude={"execId", "exec", "filePath"})
