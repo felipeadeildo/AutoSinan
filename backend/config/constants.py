@@ -94,7 +94,16 @@ ROLES: Mapping[Literal["admin", "user"], List[str]] = {
         "users:update",
         "users:delete",
         "bots:read",
+        "executions:read",
+        "executions:create",
+        "executions:update",
     ],
-    "user": ["users:read", "bots:read"],
+    "user": [
+        "users:read",
+        "bots:read",
+        "executions:read",
+        "executions:create",
+        "executions:update",
+    ],
 }
 """Roles that will be used in the app and permissions to access some routes."""
